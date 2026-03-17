@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { announcementsService } from '../services/announcements';
-import { FaBullhorn, FaCalendar } from 'react-icons/fa';
+import { FaBullhorn, FaCalendar, FaArrowLeft } from 'react-icons/fa';
 import { formatDate } from '../utils/helpers';
 import Loader from '../components/common/Loader';
-import ShareButtons from '../components/announcements/ShareButtons';
 
 const AnnouncementsPage = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -36,11 +35,14 @@ const AnnouncementsPage = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Announcements List */}
+        {/* Announcements List - Left Sidebar */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow-md overflow-hidden sticky top-24">
             <div className="p-4 bg-primary-600 text-white">
-              <h2 className="font-semibold">All Announcements</h2>
+              <h2 className="font-semibold flex items-center gap-2">
+                <FaBullhorn />
+                All Announcements
+              </h2>
             </div>
             <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
               {announcements.length > 0 ? (
@@ -49,40 +51,43 @@ const AnnouncementsPage = () => {
                     key={announcement.id}
                     onClick={() => setSelectedAnnouncement(announcement)}
                     className={`p-4 cursor-pointer hover:bg-gray-50 transition ${
-                      selectedAnnouncement?.id === announcement.id ? 'bg-primary-50' : ''
+                      selectedAnnouncement?.id === announcement.id ? 'bg-primary-50 border-l-4 border-primary-600' : ''
                     }`}
                   >
-                    <h3 className="font-semibold mb-1">{announcement.title}</h3>
+                    <h3 className="font-semibold text-primary-600 mb-1">{announcement.title}</h3>
                     <p className="text-sm text-gray-600 line-clamp-2">
                       {announcement.content}
                     </p>
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                      <FaCalendar className="text-xs" />
                       {formatDate(announcement.created_at)}
                     </p>
                   </div>
                 ))
               ) : (
                 <div className="p-8 text-center text-gray-500">
-                  No announcements yet
+                  <p>No announcements yet</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Announcement Detail */}
+        {/* Announcement Detail - Right Content */}
         <div className="lg:col-span-2">
           {selectedAnnouncement ? (
             <div className="bg-white rounded-lg shadow-md p-8">
-              <div className="flex justify-between items-start mb-4">
-                <h1 className="text-3xl font-bold">{selectedAnnouncement.title}</h1>
-                
-                {/* Share Buttons */}
-                <ShareButtons 
-                  announcement={selectedAnnouncement}
-                  url={`${window.location.origin}/announcements`}
-                />
-              </div>
+              <button
+                onClick={() => setSelectedAnnouncement(null)}
+                className="flex items-center gap-2 text-gray-600 hover:text-primary-600 mb-6 transition md:hidden"
+              >
+                <FaArrowLeft />
+                <span>Back to list</span>
+              </button>
+
+              <h1 className="text-3xl font-bold text-primary-600 mb-4">
+                {selectedAnnouncement.title}
+              </h1>
               
               <div className="flex items-center gap-4 text-sm text-gray-500 mb-6 pb-6 border-b">
                 <span className="flex items-center gap-1">
@@ -98,7 +103,7 @@ const AnnouncementsPage = () => {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center">
+            <div className="bg-white rounded-lg shadow-md p-12 text-center hidden lg:block">
               <FaBullhorn className="text-6xl text-gray-300 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-700 mb-2">
                 Select an Announcement
@@ -110,6 +115,33 @@ const AnnouncementsPage = () => {
           )}
         </div>
       </div>
+
+      {/* Mobile View - Show selected or list */}
+      {!selectedAnnouncement && (
+        <div className="lg:hidden mt-8">
+          <h2 className="text-xl font-bold mb-4">All Announcements</h2>
+          <div className="space-y-4">
+            {announcements.map((announcement) => (
+              <div
+                key={announcement.id}
+                onClick={() => setSelectedAnnouncement(announcement)}
+                className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition border border-gray-100"
+              >
+                <h3 className="text-xl font-semibold text-primary-600 mb-2">
+                  {announcement.title}
+                </h3>
+                <p className="text-gray-600 mb-3 line-clamp-3">
+                  {announcement.content}
+                </p>
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  <FaCalendar />
+                  {formatDate(announcement.created_at)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

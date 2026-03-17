@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { announcementsService } from '../services/announcements';
-import { FaBullhorn, FaCalendar, FaUser, FaArrowLeft } from 'react-icons/fa';
+import { FaBullhorn, FaCalendar } from 'react-icons/fa';
 import { formatDate } from '../utils/helpers';
 import Loader from '../components/common/Loader';
-import { useNavigate } from 'react-router-dom';
 
 const AnnouncementsPage = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetchAnnouncements();
@@ -75,14 +73,6 @@ const AnnouncementsPage = () => {
         <div className="lg:col-span-2">
           {selectedAnnouncement ? (
             <div className="bg-white rounded-lg shadow-md p-8">
-              <button
-                onClick={() => setSelectedAnnouncement(null)}
-                className="flex items-center gap-2 text-gray-600 hover:text-primary-600 mb-6 transition"
-              >
-                <FaArrowLeft />
-                <span>Back to list</span>
-              </button>
-
               <h1 className="text-3xl font-bold mb-4">{selectedAnnouncement.title}</h1>
               
               <div className="flex items-center gap-4 text-sm text-gray-500 mb-6 pb-6 border-b">

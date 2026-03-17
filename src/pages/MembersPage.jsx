@@ -26,7 +26,7 @@ const MembersPage = () => {
   if (loading) return <Loader />;
 
   return (
-    <div className="container-custom py-12">
+    <div className="container-custom py-12 min-h-[60vh]">
       <h1 className="text-4xl font-bold text-center mb-4">Our Members</h1>
       <p className="text-gray-600 text-center mb-8 max-w-2xl mx-auto">
         Meet the talented members of Feza Programming Club
@@ -90,15 +90,39 @@ const MembersPage = () => {
             </p>
             
             <div className="flex justify-center gap-4 text-gray-500">
-              <a href="#" className="hover:text-primary-600 transition">
-                <FaGithub className="text-xl" />
-              </a>
-              <a href="#" className="hover:text-primary-600 transition">
-                <FaLinkedin className="text-xl" />
-              </a>
-              <a href="#" className="hover:text-primary-600 transition">
-                <FaTwitter className="text-xl" />
-              </a>
+              {member.github && (
+                <a 
+                  href={member.github} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-primary-600 transition"
+                  aria-label="GitHub"
+                >
+                  <FaGithub className="text-xl" />
+                </a>
+              )}
+              {member.linkedin && (
+                <a 
+                  href={member.linkedin} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-primary-600 transition"
+                  aria-label="LinkedIn"
+                >
+                  <FaLinkedin className="text-xl" />
+                </a>
+              )}
+              {member.twitter && (
+                <a 
+                  href={member.twitter} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-primary-600 transition"
+                  aria-label="Twitter"
+                >
+                  <FaTwitter className="text-xl" />
+                </a>
+              )}
             </div>
           </div>
         ))}

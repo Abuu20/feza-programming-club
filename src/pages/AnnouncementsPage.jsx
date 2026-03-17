@@ -3,6 +3,7 @@ import { announcementsService } from '../services/announcements';
 import { FaBullhorn, FaCalendar } from 'react-icons/fa';
 import { formatDate } from '../utils/helpers';
 import Loader from '../components/common/Loader';
+import ShareButtons from '../components/announcements/ShareButtons';
 
 const AnnouncementsPage = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -73,7 +74,15 @@ const AnnouncementsPage = () => {
         <div className="lg:col-span-2">
           {selectedAnnouncement ? (
             <div className="bg-white rounded-lg shadow-md p-8">
-              <h1 className="text-3xl font-bold mb-4">{selectedAnnouncement.title}</h1>
+              <div className="flex justify-between items-start mb-4">
+                <h1 className="text-3xl font-bold">{selectedAnnouncement.title}</h1>
+                
+                {/* Share Buttons */}
+                <ShareButtons 
+                  announcement={selectedAnnouncement}
+                  url={`${window.location.origin}/announcements`}
+                />
+              </div>
               
               <div className="flex items-center gap-4 text-sm text-gray-500 mb-6 pb-6 border-b">
                 <span className="flex items-center gap-1">

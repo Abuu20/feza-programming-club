@@ -9,7 +9,7 @@ import {
   ChatBubbleLeftRightIcon,
   ArrowRightIcon
 } from '@heroicons/react/24/outline';
-import { FaBullhorn } from 'react-icons/fa';
+import { FaBullhorn, FaWhatsapp, FaCalendar, FaClock } from 'react-icons/fa';
 import { announcementsService } from '../services/announcements';
 import { useActivities } from '../hooks/useActivities';
 import { formatDate } from '../utils/helpers';
@@ -29,13 +29,19 @@ const HomePage = () => {
   }, []);
 
   const fetchAnnouncements = async () => {
-    const { data } = await announcementsService.getLatest(3);
+    const { data } = await announcementsService.getLatest(4);
     setAnnouncements(data || []);
     setLoadingAnnouncements(false);
   };
 
   const handleJoinSuccess = (email) => {
     toast.success(`Application received! Check ${email} for updates.`);
+  };
+
+  const handleWhatsAppShare = (announcement) => {
+    const text = `*${announcement.title}*\n\n${announcement.content.substring(0, 100)}...\n\nRead more: ${window.location.origin}/announcements`;
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
   };
 
   // Get latest 3 activities for preview
@@ -71,23 +77,26 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* Announcements Section - Polished */}
-      <section className="py-12 bg-white">
+      {/* Announcements Section - Club Updates */}
+      <section className="py-16 bg-white">
         <div className="container-custom">
           {/* Section Header */}
-          <div className="flex justify-between items-end mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10">
             <div>
-              <h2 className="text-3xl font-bold text-primary-500 mb-2 flex items-center gap-2">
-                <FaBullhorn className="text-primary-500" />
-                Latest Announcements
+              <div className="inline-flex items-center gap-2 bg-primary-100 px-4 py-2 rounded-full mb-3">
+                <FaBullhorn className="text-primary-600" />
+                <span className="text-sm font-semibold text-primary-600">Club Updates</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-primary-600 mb-2">
+                Latest from the Club
               </h2>
-              <p className="text-gray-600">Stay updated with club news</p>
+              <p className="text-gray-600">Stay informed with our latest news and announcements</p>
             </div>
             <button
               onClick={() => navigate('/announcements')}
-              className="text-secondary-500 hover:text-secondary-600 font-semibold flex items-center gap-1"
+              className="mt-4 md:mt-0 text-secondary-500 hover:text-secondary-600 font-semibold flex items-center gap-2 bg-secondary-50 px-5 py-2.5 rounded-lg transition hover:bg-secondary-100"
             >
-              View All
+              <span>View All Updates</span>
               <ArrowRightIcon className="w-4 h-4" />
             </button>
           </div>
@@ -95,42 +104,78 @@ const HomePage = () => {
           {loadingAnnouncements ? (
             <Loader />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {announcements.length > 0 ? (
-                announcements.map((announcement) => (
+                announcements.map((announcement, index) => (
                   <div
                     key={announcement.id}
-                    className="bg-white rounded-lg shadow-md hover:shadow-lg transition p-6 border border-gray-100"
+                    className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 group"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="bg-primary-100 p-3 rounded-lg">
-                        <FaBullhorn className="text-primary-600" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg text-primary-600 mb-2">
-                          {announcement.title}
-                        </h3>
-                        <p className="text-gray-600 text-sm mb-3 line-clamp-3">
-                          {announcement.content}
-                        </p>
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-gray-500">
-                            {formatDate(announcement.created_at)}
-                          </p>
-                          <button
-                            onClick={() => navigate('/announcements')}
-                            className="text-secondary-500 hover:text-secondary-600 text-sm font-medium flex items-center gap-1"
-                          >
-                            Read more
-                            <ArrowRightIcon className="w-3 h-3" />
-                          </button>
+                    {/* Colored top bar */}
+                    <div className={`h-2 ${
+                      index % 4 === 0 ? 'bg-primary-500' :
+                      index % 4 === 1 ? 'bg-secondary-500' :
+                      index % 4 === 2 ? 'bg-green-500' :
+                      'bg-purple-500'
+                    }`}></div>
+                    
+                    <div className="p-5">
+                      {/* Header with icon and share */}
+                      <div className="flex justify-between items-start mb-3">
+                        <div className={`p-2 rounded-lg ${
+                          index % 4 === 0 ? 'bg-primary-100' :
+                          index % 4 === 1 ? 'bg-secondary-100' :
+                          index % 4 === 2 ? 'bg-green-100' :
+                          'bg-purple-100'
+                        }`}>
+                          <FaBullhorn className={`${
+                            index % 4 === 0 ? 'text-primary-600' :
+                            index % 4 === 1 ? 'text-secondary-600' :
+                            index % 4 === 2 ? 'text-green-600' :
+                            'text-purple-600'
+                          }`} />
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleWhatsAppShare(announcement);
+                          }}
+                          className="text-gray-400 hover:text-green-600 transition"
+                          title="Share on WhatsApp"
+                        >
+                          <FaWhatsapp size={18} />
+                        </button>
+                      </div>
+
+                      {/* Content */}
+                      <h3 className="font-bold text-gray-800 mb-2 line-clamp-2 group-hover:text-primary-600 transition">
+                        {announcement.title}
+                      </h3>
+                      
+                      <p className="text-sm text-gray-600 mb-4 line-clamp-3 leading-relaxed">
+                        {announcement.content}
+                      </p>
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <FaCalendar className="text-primary-400" />
+                          <span>{formatDate(announcement.created_at)}</span>
+                        </div>
+                        <button
+                          onClick={() => navigate('/announcements')}
+                          className="text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+                        >
+                          <span>Read</span>
+                          <ArrowRightIcon className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="col-span-3 text-center py-8 bg-gray-50 rounded-lg">
+                <div className="col-span-4 text-center py-12 bg-gray-50 rounded-xl">
+                  <FaBullhorn className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-500">No announcements yet</p>
                 </div>
               )}
@@ -140,7 +185,7 @@ const HomePage = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-20">
+      <section className="py-20 bg-gray-50">
         <div className="container-custom">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-primary-500 mb-4">Why Join Us?</h2>
@@ -250,16 +295,16 @@ const HomePage = () => {
       </section>
 
       {/* Latest Activities Section */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-white">
         <div className="container-custom">
-          <div className="flex justify-between items-end mb-12">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12">
             <div>
               <h2 className="text-4xl font-bold text-primary-500 mb-4">Latest Activities</h2>
               <p className="text-xl text-gray-600">Join our upcoming events and workshops</p>
             </div>
             <button
               onClick={() => navigate('/activities')}
-              className="text-secondary-500 hover:text-secondary-600 font-semibold flex items-center gap-1"
+              className="mt-4 md:mt-0 text-secondary-500 hover:text-secondary-600 font-semibold flex items-center gap-2"
             >
               View All Activities
               <ArrowRightIcon className="w-5 h-5" />
@@ -306,7 +351,7 @@ const HomePage = () => {
                   </div>
                 ))
               ) : (
-                <div className="col-span-3 text-center py-12 bg-white rounded-2xl">
+                <div className="col-span-3 text-center py-12 bg-gray-50 rounded-2xl">
                   <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500 text-lg">No upcoming activities</p>
                   <button

@@ -10,7 +10,6 @@ import {
   FaCog,
   FaCode,
   FaFile,
-  FaFolderOpen,
   FaPlus,
   FaTrash,
   FaExpand,
@@ -21,8 +20,7 @@ import {
   FaWifi,
   FaRocket,
   FaServer,
-  FaClock,
-  FaKeyboard
+  FaClock
 } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
 import { codesService } from '../../services/codes';
@@ -31,12 +29,21 @@ import toast from 'react-hot-toast';
 const EnhancedPythonEditor = () => {
   const { user } = useAuth();
   const [code, setCode] = useState(`# Welcome to Feza Python Lab! 🐍
-# Try this interactive program:
+# Choose your execution mode below
 
-name = input("What's your name? ")
-age = input("How old are you? ")
-print(f"\\nHello {name}! You are {age} years old.")
-print("Nice to meet you!")`);
+print("Hello from Python!")
+name = "Feza Student"
+print(f"Welcome, {name}!")
+
+# Try some calculations
+for i in range(1, 6):
+    print(f"Number {i} squared is {i**2}")
+
+# Define a function
+def greet(person):
+    return f"Hello, {person}!"
+
+print(greet("Python Coder"))`);
 
   const [output, setOutput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
@@ -60,13 +67,6 @@ print("Nice to meet you!")`);
   const [apiStatus, setApiStatus] = useState('checking'); // 'checking', 'online', 'offline'
   const [executionTime, setExecutionTime] = useState(null);
   const [memoryUsed, setMemoryUsed] = useState(null);
-  
-  // Input modal states
-  const [showInputModal, setShowInputModal] = useState(false);
-  const [inputPrompt, setInputPrompt] = useState('');
-  const [inputResolver, setInputResolver] = useState(null);
-  const [inputHistory, setInputHistory] = useState([]);
-  const [pendingInputs, setPendingInputs] = useState([]);
 
   // Load Pyodide on mount if browser mode is selected
   useEffect(() => {
@@ -105,6 +105,12 @@ print("Nice to meet you!")`);
           // @ts-ignore
           const pyodideInstance = await window.loadPyodide({
             indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/',
+            stdout: (text) => {
+              setOutput(prev => prev + text + '\n');
+            },
+            stderr: (text) => {
+              setOutput(prev => prev + 'Error: ' + text + '\n');
+            }
           });
           
           setPyodide(pyodideInstance);
@@ -155,31 +161,6 @@ print("Nice to meet you!")`);
     }
   };
 
-  // Check if code uses input()
-  const detectInputUsage = (code) => {
-    return code.includes('input(');
-  };
-
-  // Handle Python input requests
-  const handlePythonInput = (promptText) => {
-    return new Promise((resolve) => {
-      setInputPrompt(promptText || 'Enter value:');
-      setShowInputModal(true);
-      setInputResolver(() => resolve);
-    });
-  };
-
-  // Handle input submission
-  const handleInputSubmit = (value) => {
-    setShowInputModal(false);
-    setInputHistory([...inputHistory, value]);
-    if (inputResolver) {
-      inputResolver(value + '\n');
-      setInputResolver(null);
-    }
-  };
-
-  // Run with Pyodide (browser mode)
   const runWithPyodide = async () => {
     if (!pyodide) {
       setOutput('Python environment not loaded. Please wait...');
@@ -189,44 +170,15 @@ print("Nice to meet you!")`);
     const startTime = performance.now();
     
     try {
+      // Clear previous output
       setOutput('');
-      setInputHistory([]);
       
-      // Set up custom input handler
+      // Capture stdout
       pyodide.runPython(`
 import sys
 from io import StringIO
-
-# Store the input handler function
-input_handler = None
-
-class CustomInput:
-    def __init__(self, input_callback):
-        self.input_callback = input_callback
-        self.buffer = ""
-    
-    def readline(self, *args):
-        import asyncio
-        # Use the callback to get input
-        result = asyncio.get_event_loop().run_until_complete(
-            self.input_callback("Python input:")
-        )
-        return result
-
-# Redirect stdout/stderr
 sys.stdout = StringIO()
 sys.stderr = StringIO()
-      `);
-      
-      // Register the JavaScript input handler
-      const inputCallback = pyodide.toPy(async (prompt) => {
-        return await handlePythonInput(prompt);
-      });
-      
-      pyodide.runPython(`
-# Set up the input handler
-input_handler = ${inputCallback}
-sys.stdin = CustomInput(input_handler)
       `);
       
       // Run the code
@@ -239,7 +191,7 @@ sys.stdin = CustomInput(input_handler)
       const endTime = performance.now();
       setExecutionTime((endTime - startTime).toFixed(2));
       
-      // Estimate memory
+      // Estimate memory (not accurate, but gives idea)
       const memoryEstimate = Math.round(code.length * 0.1);
       setMemoryUsed(memoryEstimate);
       
@@ -254,7 +206,6 @@ sys.stdin = CustomInput(input_handler)
     }
   };
 
-  // Run with Piston API
   const runWithApi = async () => {
     const startTime = performance.now();
     
@@ -273,8 +224,7 @@ sys.stdin = CustomInput(input_handler)
           files: [{ 
             name: files[currentFile].name,
             content: code 
-          }],
-          stdin: pendingInputs.join('\n') // Send any pending inputs
+          }]
         }),
         signal: controller.signal
       });
@@ -294,12 +244,7 @@ sys.stdin = CustomInput(input_handler)
         const output_text = result.run.output || result.run.stderr || 'No output';
         setOutput(output_text);
         
-        // Check if program is waiting for input
-        if (output_text.includes('input(') || output_text.endsWith(':')) {
-          // Show input modal for API mode
-          handlePythonInput('Program needs input:');
-        }
-        
+        // Estimate memory
         setMemoryUsed(Math.round(code.length * 0.15));
         
         if (result.run.stderr) {
@@ -310,26 +255,17 @@ sys.stdin = CustomInput(input_handler)
       console.error('API error:', error);
       setOutput(`API Error: ${error.message}\n\nTry switching to Browser mode for offline execution.`);
       
+      // If API fails, suggest switching to browser mode
       if (executionMode === 'api') {
         toast.error('API unavailable - consider using Browser mode');
       }
     }
   };
 
-  // Main run handler
   const handleRun = async () => {
     setIsRunning(true);
     setExecutionTime(null);
     setMemoryUsed(null);
-    setPendingInputs([]);
-    
-    const needsInput = detectInputUsage(code);
-    
-    // If program needs input and we're in browser mode without input handler ready
-    if (needsInput && executionMode === 'browser' && !pyodide) {
-      toast('This program uses input(). Loading Python environment...');
-      await loadPyodide();
-    }
     
     if (executionMode === 'browser') {
       await runWithPyodide();
@@ -444,7 +380,6 @@ sys.stdin = CustomInput(input_handler)
     setOutput('');
     setExecutionTime(null);
     setMemoryUsed(null);
-    setInputHistory([]);
     toast.success('Console cleared');
   };
 
@@ -460,10 +395,6 @@ sys.stdin = CustomInput(input_handler)
 
   const samplePrograms = {
     hello: 'print("Hello, Feza Programming Club!")',
-    input: `# Interactive Program
-name = input("What's your name? ")
-age = input("How old are you? ")
-print(f"\\nHello {name}! You are {age} years old.")`,
     math: `
 # Math operations
 a = 15
@@ -519,7 +450,7 @@ while True:
         else:
             print(f"✨ Correct! You got it in {attempts} attempts!")
             break
-    except ValueError:
+    except:
         print("Please enter a number")
     `
   };
@@ -546,7 +477,7 @@ while True:
                 ? 'bg-primary-600 text-white' 
                 : 'text-gray-300 hover:bg-gray-600'
             }`}
-            title="Run in browser (fast, offline, supports input())"
+            title="Run in browser (fast, offline)"
           >
             <FaRocket />
             <span className="text-sm hidden md:inline">Browser</span>
@@ -590,7 +521,7 @@ while True:
               )}
               {apiStatus === 'offline' && (
                 <span className="text-red-500 text-xs flex items-center gap-1">
-                  <FaWifi /> Server Offline
+                  <FaExclamationTriangle /> Server Offline
                 </span>
               )}
             </>
@@ -600,7 +531,7 @@ while True:
         {/* Run Button */}
         <button
           onClick={handleRun}
-          disabled={isRunning || (executionMode === 'browser' && !pyodideLoaded && !pyodideLoading)}
+          disabled={isRunning || (executionMode === 'browser' && !pyodideLoaded)}
           className={`p-2 rounded flex items-center gap-2 ${
             theme === 'dark' 
               ? 'hover:bg-gray-700 text-green-400' 
@@ -668,7 +599,6 @@ while True:
         >
           <option value="" disabled>Load Example</option>
           <option value="hello">Hello World</option>
-          <option value="input">Interactive Input</option>
           <option value="math">Math Operations</option>
           <option value="loop">Loop Example</option>
           <option value="function">Function Example</option>
@@ -734,7 +664,7 @@ while True:
       {showSettings && (
         <div className={`${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
           <h3 className="font-bold mb-3">Editor Settings</h3>
-          <div className="flex gap-6 flex-wrap">
+          <div className="flex gap-6">
             <div>
               <label className="block text-sm mb-1">Font Size</label>
               <input
@@ -771,7 +701,7 @@ while True:
                       : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
                   }`}
                 >
-                  Browser (Fast, Input Support)
+                  Browser (Fast)
                 </button>
                 <button
                   onClick={() => setExecutionMode('api')}
@@ -890,13 +820,6 @@ while True:
                 </div>
               )}
 
-              {/* Input History Indicator */}
-              {inputHistory.length > 0 && (
-                <span className="text-xs text-purple-500 flex items-center gap-1">
-                  <FaKeyboard /> {inputHistory.length} inputs
-                </span>
-              )}
-
               {/* Mode Indicator */}
               <span className={`text-xs px-2 py-0.5 rounded ${
                 executionMode === 'browser' 
@@ -921,49 +844,6 @@ while True:
           
           <div className="flex-1 overflow-auto p-4 font-mono text-sm">
             <pre className="whitespace-pre-wrap">{output || 'Ready to run Python code...'}</pre>
-          </div>
-        </div>
-      )}
-
-      {/* Input Modal */}
-      {showInputModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 max-w-full shadow-2xl">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <FaKeyboard className="text-primary-600" />
-              Python Input Required
-            </h3>
-            <p className="mb-3 text-gray-600">{inputPrompt}</p>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const input = e.target.input.value;
-              handleInputSubmit(input);
-            }}>
-              <input
-                name="input"
-                className="w-full px-3 py-2 border rounded-lg mb-3 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                autoFocus
-                placeholder="Type your input here..."
-              />
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleInputSubmit('')}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition"
-                >
-                  Skip
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
-                >
-                  Submit
-                </button>
-              </div>
-            </form>
-            <p className="text-xs text-gray-500 mt-3">
-              Your input will be sent to the Python program
-            </p>
           </div>
         </div>
       )}

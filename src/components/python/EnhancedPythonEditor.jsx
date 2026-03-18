@@ -19,11 +19,8 @@ import {
   FaSun,
   FaExclamationTriangle,
   FaWifi,
-  FaWifiSlash,
   FaRocket,
   FaServer,
-  FaToggleOn,
-  FaToggleOff,
   FaClock,
   FaKeyboard
 } from 'react-icons/fa';
@@ -101,7 +98,7 @@ print("Nice to meet you!")`);
     try {
       // Create script element to load Pyodide
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js'\;
+      script.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
       
       script.onload = async () => {
         try {
@@ -593,7 +590,7 @@ while True:
               )}
               {apiStatus === 'offline' && (
                 <span className="text-red-500 text-xs flex items-center gap-1">
-                  <FaWifiSlash /> Server Offline
+                  <FaWifi /> Server Offline
                 </span>
               )}
             </>

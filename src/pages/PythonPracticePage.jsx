@@ -1,8 +1,8 @@
 import React from 'react';
-import CodeMirrorEditor from '../components/python/CodeMirrorEditor';
+import EnhancedPythonEditor from '../components/python/EnhancedPythonEditor';
 
 const PythonPracticePage = () => {
-  return <CodeMirrorEditor />;
+  return <EnhancedPythonEditor />;
 };
 
 export default PythonPracticePage;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaEdit, FaTrash, FaPlus, FaKey, FaSpinner } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaKey, FaSpinner, FaGithub, FaLinkedin, FaTwitter, FaGlobe } from 'react-icons/fa';
 import { membersService } from '../../services/members';
 import { supabase } from '../../services/supabase';
 import Loader from '../../components/common/Loader';
@@ -56,7 +56,7 @@ const AdminMembers = () => {
       toast.success(`Password reset email sent to ${member.name}! Check their inbox/spam folder.`);
     } catch (error) {
       console.error('Error:', error);
-      toast.error(error.message || 'Failed to send reset email. Make sure the user has an auth account.');
+      toast.error(error.message || 'Failed to send reset email');
     } finally {
       setSendingEmail(null);
     }
@@ -88,18 +88,37 @@ const AdminMembers = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Photo</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
+               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {members.map((member) => (
                 <tr key={member.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
+                    {member.photo_url ? (
+                      <img
+                        src={member.photo_url}
+                        alt={member.name}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span className="text-gray-500 text-sm">{member.name?.charAt(0) || '?'}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                    {member.github && (
+                      <div className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                        <FaGithub size={10} /> GitHub
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-500">{member.email || '-'}</div>
@@ -107,12 +126,16 @@ const AdminMembers = () => {
                   <td className="px-6 py-4 text-sm text-gray-500">{member.role || 'Member'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      member.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      member.status === 'active' 
+                        ? 'bg-green-100 text-green-800' 
+                        : member.status === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-gray-100 text-gray-800'
                     }`}>
                       {member.status || 'active'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-sm font-medium">
                     <div className="flex gap-3">
                       <button
                         onClick={() => handleResetPassword(member)}
@@ -122,10 +145,18 @@ const AdminMembers = () => {
                       >
                         {sendingEmail === member.id ? <FaSpinner className="animate-spin" /> : <FaKey size={16} />}
                       </button>
-                      <button onClick={() => handleEdit(member)} className="text-blue-600 hover:text-blue-900" title="Edit">
+                      <button
+                        onClick={() => handleEdit(member)}
+                        className="text-blue-600 hover:text-blue-900 transition"
+                        title="Edit Member"
+                      >
                         <FaEdit size={16} />
                       </button>
-                      <button onClick={() => handleDelete(member.id)} className="text-red-600 hover:text-red-900" title="Delete">
+                      <button
+                        onClick={() => handleDelete(member.id)}
+                        className="text-red-600 hover:text-red-900 transition"
+                        title="Delete Member"
+                      >
                         <FaTrash size={16} />
                       </button>
                     </div>
@@ -139,14 +170,22 @@ const AdminMembers = () => {
         {members.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500">No members found</p>
-            <button onClick={() => setShowForm(true)} className="mt-4 text-primary-600 hover:text-primary-700">
+            <button
+              onClick={() => setShowForm(true)}
+              className="mt-4 text-primary-600 hover:text-primary-700"
+            >
               Add your first member
             </button>
           </div>
         )}
       </div>
 
-      {showForm && <MemberForm member={editingMember} onClose={handleCloseForm} />}
+      {showForm && (
+        <MemberForm
+          member={editingMember}
+          onClose={handleCloseForm}
+        />
+      )}
     </div>
   );
 };

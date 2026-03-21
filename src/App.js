@@ -30,6 +30,8 @@ import RegistrationRequest from './pages/student/RegistrationRequest';
 import ResetPassword from './pages/ResetPassword';
 import UpdatePassword from './pages/UpdatePassword';
 import ForcePasswordChange from './pages/ForcePasswordChange';
+import MemberProfile from './pages/student/MemberProfile';
+
 
 
 
@@ -86,6 +88,8 @@ function App() {
             <Route element={<StudentPrivateRoute />}>
               <Route element={<PublicLayout />}>
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
+                <Route path="/student/profile" element={<MemberProfile />} />
+
               </Route>
             </Route>
 

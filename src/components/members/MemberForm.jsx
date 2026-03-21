@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { FaTimes, FaUpload } from 'react-icons/fa';
+import { FaTimes, FaUpload, FaTrash } from 'react-icons/fa';
 import { membersService } from '../../services/members';
 import { storageService } from '../../services/storage';
+import { supabase } from '../../services/supabase';
 import { BUCKETS } from '../../utils/constants';
 import toast from 'react-hot-toast';
 
 const MemberForm = ({ member, onClose }) => {
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [formData, setFormData] = useState({
     name: member?.name || '',
     role: member?.role || '',
@@ -27,6 +29,18 @@ const MemberForm = ({ member, onClose }) => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Check file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image must be less than 2MB');
+        return;
+      }
+      
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please upload an image file');
+        return;
+      }
+      
       setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -36,23 +50,47 @@ const MemberForm = ({ member, onClose }) => {
     }
   };
 
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview('');
+    setFormData({ ...formData, photo_url: '' });
+  };
+
   const uploadImage = async () => {
     if (!imageFile) return formData.photo_url;
 
-    const fileName = `member-${Date.now()}-${imageFile.name}`;
-    const { error } = await storageService.uploadFile(
-      BUCKETS.MEMBERS,
-      fileName,
-      imageFile
-    );
+    setUploadingImage(true);
+    
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || 'anonymous';
+      
+      // Generate unique filename
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
+      const filePath = `member-photos/${fileName}`;
 
-    if (error) {
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('member-photos')
+        .upload(filePath, imageFile);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('member-photos')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Upload error:', error);
       toast.error('Failed to upload image');
       return null;
+    } finally {
+      setUploadingImage(false);
     }
-
-    const publicUrl = await storageService.getPublicUrl(BUCKETS.MEMBERS, fileName);
-    return publicUrl;
   };
 
   const handleSubmit = async (e) => {
@@ -88,6 +126,7 @@ const MemberForm = ({ member, onClose }) => {
       onClose();
     } catch (error) {
       toast.error('Failed to save member');
+      console.error('Save error:', error);
     } finally {
       setLoading(false);
     }
@@ -95,7 +134,7 @@ const MemberForm = ({ member, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">
             {member ? 'Edit Member' : 'Add New Member'}
@@ -106,6 +145,55 @@ const MemberForm = ({ member, onClose }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Image Upload Section */}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Profile Picture
+            </label>
+            
+            <div className="flex flex-col items-center gap-4">
+              {/* Image Preview */}
+              {imagePreview ? (
+                <div className="relative">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-32 h-32 rounded-full object-cover border-4 border-primary-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={removeImage}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+                  >
+                    <FaTrash size={12} />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-32 h-32 rounded-full bg-gray-100 flex items-center justify-center">
+                  <span className="text-4xl text-gray-400">📸</span>
+                </div>
+              )}
+              
+              {/* Upload Button */}
+              <label className="cursor-pointer">
+                <div className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition flex items-center gap-2">
+                  <FaUpload size={14} />
+                  <span>{imagePreview ? 'Change Photo' : 'Upload Photo'}</span>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </label>
+              <p className="text-xs text-gray-500">
+                JPG, PNG or GIF. Max 2MB.
+              </p>
+            </div>
+          </div>
+
+          {/* Form Fields */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Name *
@@ -160,36 +248,9 @@ const MemberForm = ({ member, onClose }) => {
               onChange={handleChange}
               className="input-field w-32"
               min="0"
+              placeholder="0"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Photo
-            </label>
-            <div className="flex items-center gap-4">
-              {imagePreview && (
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-20 h-20 rounded-full object-cover"
-                />
-              )}
-              <label className="flex-1">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-primary-500 transition">
-                  <FaUpload className="mx-auto text-gray-400 mb-2" />
-                  <span className="text-sm text-gray-500">
-                    Click to upload photo
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </div>
-              </label>
-            </div>
+            <p className="text-xs text-gray-500 mt-1">Lower numbers appear first</p>
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
@@ -202,10 +263,10 @@ const MemberForm = ({ member, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || uploadingImage}
               className="btn-primary"
             >
-              {loading ? 'Saving...' : (member ? 'Update' : 'Add Member')}
+              {loading || uploadingImage ? 'Saving...' : (member ? 'Update' : 'Add Member')}
             </button>
           </div>
         </form>

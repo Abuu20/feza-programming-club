@@ -19,13 +19,19 @@ import ContactPage from './pages/ContactPage';
 import PythonPracticePage from './pages/PythonPracticePage';
 import ChallengesPage from './pages/ChallengesPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
-import AdminAnnouncements from './pages/admin/AdminAnnouncements';
+import CurriculumPage from './pages/CurriculumPage';
+import AchievementsPage from './pages/AchievementsPage';
 
 // Student Pages
 import StudentLogin from './pages/student/StudentLogin';
 import StudentRegister from './pages/student/StudentRegister';
 import StudentDashboard from './pages/student/StudentDashboard';
 import RegistrationRequest from './pages/student/RegistrationRequest';
+import ResetPassword from './pages/ResetPassword';
+import UpdatePassword from './pages/UpdatePassword';
+import ForcePasswordChange from './pages/ForcePasswordChange';
+
+
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -37,6 +43,8 @@ import AdminMessages from './pages/admin/AdminMessages';
 import AdminMembershipApplications from './pages/admin/AdminMembershipApplications';
 import AdminChallenges from './pages/admin/AdminChallenges';
 import AdminStudentApprovals from './pages/admin/AdminStudentApprovals';
+import AdminAnnouncements from './pages/admin/AdminAnnouncements';
+import AdminCurriculum from './pages/admin/AdminCurriculum';
 
 function App() {
   useEffect(() => {
@@ -49,44 +57,52 @@ function App() {
         <AuthProvider>
           <Toaster position="top-right" />
           <Routes>
-            {/* Public Routes - No login required */}
+            {/* Public Routes */}
             <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/activities" element={<ActivitiesPage />} />
-              <Route path="/announcements" element={<AnnouncementsPage />} />
               <Route path="/activities/:id" element={<ActivityDetailPage />} />
               <Route path="/members" element={<MembersPage />} />
               <Route path="/gallery" element={<GalleryPage />} />
               <Route path="/contact" element={<ContactPage />} />
               <Route path="/python-practice" element={<PythonPracticePage />} />
               <Route path="/challenges" element={<ChallengesPage />} />
+              <Route path="/announcements" element={<AnnouncementsPage />} />
+              <Route path="/curriculum" element={<CurriculumPage />} />
+              <Route path="/achievements" element={<AchievementsPage />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/update-password" element={<UpdatePassword />} />
+              <Route path="/force-password-change" element={<ForcePasswordChange />} />
+
+
               
-              {/* Student Auth Routes (public) */}
+              {/* Student Auth Routes */}
               <Route path="/student/login" element={<StudentLogin />} />
               <Route path="/student/register" element={<StudentRegister />} />
               <Route path="/student/request" element={<RegistrationRequest />} />
             </Route>
 
-            {/* Protected Student Routes - Login required */}
+            {/* Protected Student Routes */}
             <Route element={<StudentPrivateRoute />}>
               <Route element={<PublicLayout />}>
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
               </Route>
             </Route>
 
-            {/* Protected Admin Routes - Admin only */}
+            {/* Protected Admin Routes */}
             <Route element={<PrivateRoute />}>
               <Route element={<AdminLayout />}>
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/activities" element={<AdminActivities />} />
-                <Route path="/admin/announcements" element={<AdminAnnouncements />} />
                 <Route path="/admin/activities/:id/registrations" element={<AdminActivityRegistrations />} />
                 <Route path="/admin/members" element={<AdminMembers />} />
                 <Route path="/admin/gallery" element={<AdminGallery />} />
                 <Route path="/admin/messages" element={<AdminMessages />} />
                 <Route path="/admin/applications" element={<AdminMembershipApplications />} />
                 <Route path="/admin/challenges" element={<AdminChallenges />} />
-                <Route path="/admin/student-approvals" element={<AdminStudentApprovals />} />
+                
+                <Route path="/admin/announcements" element={<AdminAnnouncements />} />
+                <Route path="/admin/curriculum" element={<AdminCurriculum />} />
               </Route>
             </Route>
           </Routes>

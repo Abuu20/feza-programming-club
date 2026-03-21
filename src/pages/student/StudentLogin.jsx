@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabase';
 import { FaEnvelope, FaLock, FaSignInAlt, FaUserPlus, FaCode } from 'react-icons/fa';
 import toast from 'react-hot-toast';
@@ -9,7 +8,6 @@ const StudentLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -17,27 +15,20 @@ const StudentLogin = () => {
     setLoading(true);
     
     try {
-      // First, check if user exists and is approved
-      const { data: profile, error: profileError } = await supabase
-        .from('student_profiles')
-        .select('status')
-        .eq('email', email)
-        .maybeSingle();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-      if (profileError) throw profileError;
-
-      if (profile && profile.status === 'suspended') {
-        throw new Error('Your account has been suspended. Please contact admin.');
-      }
-
-      if (profile && profile.status === 'pending') {
-        throw new Error('Your account is still pending approval. Please wait for admin confirmation.');
-      }
-
-      // Attempt login
-      const { error } = await signIn(email, password);
       if (error) throw error;
-      
+
+      // Check if this is the default password
+      if (password === 'TempPass123!') {
+        toast.info('Please change your default password for security');
+        navigate('/force-password-change');
+        return;
+      }
+
       toast.success('Login successful!');
       navigate('/student/dashboard');
     } catch (error) {
@@ -48,89 +39,68 @@ const StudentLogin = () => {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <div className="flex justify-center">
-            <div className="bg-primary-600 p-3 rounded-full">
-              <FaCode className="text-white text-4xl" />
-            </div>
+    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 bg-gray-50">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+        <div className="text-center mb-8">
+          <div className="bg-primary-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FaCode className="text-white text-2xl" />
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Student Login
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Access your coding challenges and track your progress
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800">Student Login</h2>
+          <p className="text-gray-600 mt-2">Access your coding challenges and track your progress</p>
         </div>
         
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaEnvelope className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input-field pl-10"
-                  placeholder="Email address"
-                />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FaEnvelope className="h-5 w-5 text-gray-400" />
               </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="input-field pl-10"
+                placeholder="your@email.com"
+              />
             </div>
-            
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaLock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-field pl-10"
-                  placeholder="Password"
-                />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FaLock className="h-5 w-5 text-gray-400" />
               </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="input-field pl-10"
+                placeholder="••••••••"
+              />
             </div>
           </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                <FaSignInAlt className="h-5 w-5 text-primary-500 group-hover:text-primary-400" />
-              </span>
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
+          <div className="flex items-center justify-end">
+            <Link to="/student/forgot-password" className="text-sm text-primary-600 hover:text-primary-500">
+              Forgot password?
+            </Link>
           </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full btn-primary py-3"
+          >
+            {loading ? 'Signing in...' : 'Sign in'}
+          </button>
 
           <div className="text-center">
-            <Link 
-              to="/student/request" 
-              className="text-primary-600 hover:text-primary-500 font-medium inline-flex items-center gap-1"
-            >
-              <FaUserPlus />
-              Request to join the club
+            <Link to="/student/request" className="text-primary-600 hover:text-primary-500 text-sm">
+              Don't have an account? Request to join
             </Link>
           </div>
         </form>

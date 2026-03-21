@@ -16,7 +16,8 @@ import {
   FaCode,
   FaTrophy,
   FaUserPlus,
-  FaBullhorn
+  FaBullhorn,
+  FaBookOpen
 } from 'react-icons/fa';
 
 const AdminLayout = () => {
@@ -154,11 +155,7 @@ const AdminLayout = () => {
       badge: pendingCount,
       badgeColor: 'bg-red-500'
     },
-    { 
-      path: '/admin/student-approvals', 
-      icon: FaUserPlus, 
-      label: 'Student Approvals' 
-    },
+    
     { 
       path: '/admin/gallery', 
       icon: FaImages, 
@@ -170,6 +167,11 @@ const AdminLayout = () => {
       label: 'Messages',
       badge: unreadMessages,
       badgeColor: 'bg-yellow-500'
+    },
+    { 
+      path: '/admin/curriculum', 
+      icon: FaBookOpen, 
+      label: 'Curriculum' 
     },
   ];
 

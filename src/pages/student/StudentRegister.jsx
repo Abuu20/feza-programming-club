@@ -58,22 +58,28 @@ const StudentRegister = () => {
 
       if (authError) throw authError;
 
-      // Also add to members table
+      // Add to members table with user_id
       if (authData.user) {
         const { error: memberError } = await supabase
           .from('members')
           .insert([{
+            user_id: authData.user.id,  // Link to auth user
             name: formData.fullName,
             email: formData.email,
             school: formData.school,
             grade: formData.grade,
             phone: formData.phone,
             role: 'Student',
-            bio: `Joined as student on ${new Date().toLocaleDateString()}`,
-            status: 'active'
+            bio: `Joined Feza Programming Club on ${new Date().toLocaleDateString()}`,
+            status: 'active',
+            joined_date: new Date(),
+            display_order: 999
           }]);
 
-        if (memberError) console.error('Error adding to members:', memberError);
+        if (memberError) {
+          console.error('Error adding to members:', memberError);
+          // Don't throw - user is created, just log error
+        }
       }
 
       toast.success('Registration successful! Please check your email to confirm.');

@@ -61,7 +61,7 @@ const RegistrationRequest = () => {
       setSubmitted(true);
       toast.success('Registration request submitted! You will receive an email when approved.');
       
-      // Optionally send notification email to admin (via Supabase Edge Function)
+      // Optionally send notification email to admin
       await notifyAdmin(formData);
       
     } catch (error) {
@@ -126,7 +126,6 @@ const RegistrationRequest = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Full Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Full Name *
@@ -147,7 +146,6 @@ const RegistrationRequest = () => {
                 </div>
               </div>
 
-              {/* Email */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email Address *
@@ -168,7 +166,6 @@ const RegistrationRequest = () => {
                 </div>
               </div>
 
-              {/* School */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   School
@@ -188,7 +185,6 @@ const RegistrationRequest = () => {
                 </div>
               </div>
 
-              {/* Grade */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Grade/Class
@@ -208,7 +204,6 @@ const RegistrationRequest = () => {
                 </div>
               </div>
 
-              {/* Phone */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Phone Number
@@ -228,7 +223,6 @@ const RegistrationRequest = () => {
                 </div>
               </div>
 
-              {/* Reason for joining */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Why do you want to join? *

@@ -11,8 +11,9 @@ import {
   BellIcon,
   UserIcon,
   ArrowRightOnRectangleIcon,
-  UserPlusIcon
+  UserPlusIcon,
 } from '@heroicons/react/24/outline';
+import { FaBookOpen, FaTrophy } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
 
 const Navbar = () => {
@@ -37,6 +38,10 @@ const Navbar = () => {
     { path: '/challenges', icon: TrophyIcon, label: 'Challenges' },
     { path: '/python-practice', icon: CodeBracketIcon, label: 'Code Lab' },
     { path: '/contact', icon: EnvelopeIcon, label: 'Contact' },
+    { path: '/curriculum', icon: FaBookOpen, label: 'Curriculum' },
+    { path: '/achievements', icon: FaTrophy, label: 'Hall of Fame' },
+
+
   ];
 
   return (

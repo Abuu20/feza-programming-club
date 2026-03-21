@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaKey, FaSpinner } from 'react-icons/fa';
 import { membersService } from '../../services/members';
-import { storageService } from '../../services/storage';
-import { BUCKETS } from '../../utils/constants';
+import { supabase } from '../../services/supabase';
 import Loader from '../../components/common/Loader';
 import MemberForm from '../../components/members/MemberForm';
 import toast from 'react-hot-toast';
@@ -12,6 +11,7 @@ const AdminMembers = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [sendingEmail, setSendingEmail] = useState(null);
 
   useEffect(() => {
     fetchMembers();
@@ -38,6 +38,30 @@ const AdminMembers = () => {
     }
   };
 
+  const handleResetPassword = async (member) => {
+    if (!member.email) {
+      toast.error('No email address found for this member');
+      return;
+    }
+
+    setSendingEmail(member.id);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
+        redirectTo: `${window.location.origin}/update-password`,
+      });
+
+      if (error) throw error;
+
+      toast.success(`Password reset email sent to ${member.name}! Check their inbox/spam folder.`);
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error(error.message || 'Failed to send reset email. Make sure the user has an auth account.');
+    } finally {
+      setSendingEmail(null);
+    }
+  };
+
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingMember(null);
@@ -49,92 +73,80 @@ const AdminMembers = () => {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Manage Members</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="btn-primary flex items-center gap-2"
-        >
+        <div>
+          <h1 className="text-2xl font-bold">Manage Members</h1>
+          <p className="text-gray-600">Add, edit, or remove club members</p>
+        </div>
+        <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
           <FaPlus />
           Add Member
         </button>
       </div>
 
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Photo
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Order
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {members.map((member) => (
-              <tr key={member.id}>
-                <td className="px-6 py-4">
-                  {member.photo_url ? (
-                    <img
-                      src={member.photo_url}
-                      alt={member.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-200"></div>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900">{member.name}</div>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {member.role || '-'}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {member.display_order || 0}
-                </td>
-                <td className="px-6 py-4 text-sm font-medium">
-                  <button
-                    onClick={() => handleEdit(member)}
-                    className="text-blue-600 hover:text-blue-900 mr-3"
-                  >
-                    <FaEdit />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(member.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <FaTrash />
-                  </button>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {members.map((member) => (
+                <tr key={member.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-500">{member.email || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{member.role || 'Member'}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      member.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {member.status || 'active'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleResetPassword(member)}
+                        disabled={sendingEmail === member.id}
+                        className="text-orange-600 hover:text-orange-900 disabled:opacity-50"
+                        title="Send Password Reset Email"
+                      >
+                        {sendingEmail === member.id ? <FaSpinner className="animate-spin" /> : <FaKey size={16} />}
+                      </button>
+                      <button onClick={() => handleEdit(member)} className="text-blue-600 hover:text-blue-900" title="Edit">
+                        <FaEdit size={16} />
+                      </button>
+                      <button onClick={() => handleDelete(member.id)} className="text-red-600 hover:text-red-900" title="Delete">
+                        <FaTrash size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {members.length === 0 && (
-          <div className="text-center py-8">
+          <div className="text-center py-12">
             <p className="text-gray-500">No members found</p>
+            <button onClick={() => setShowForm(true)} className="mt-4 text-primary-600 hover:text-primary-700">
+              Add your first member
+            </button>
           </div>
         )}
       </div>
 
-      {showForm && (
-        <MemberForm
-          member={editingMember}
-          onClose={handleCloseForm}
-        />
-      )}
+      {showForm && <MemberForm member={editingMember} onClose={handleCloseForm} />}
     </div>
   );
 };

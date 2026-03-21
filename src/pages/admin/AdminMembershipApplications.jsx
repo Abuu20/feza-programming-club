@@ -11,7 +11,9 @@ import {
   FaUserCheck,
   FaUserTimes,
   FaEye,
-  FaBell
+  FaCopy,
+  FaSpinner,
+  FaKey
 } from 'react-icons/fa';
 import Loader from '../../components/common/Loader';
 import { formatDate } from '../../utils/helpers';
@@ -21,12 +23,18 @@ const AdminMembershipApplications = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('pending');
   const [selectedApp, setSelectedApp] = useState(null);
   const [adminNotes, setAdminNotes] = useState('');
-  const [realtimeStatus, setRealtimeStatus] = useState('connecting');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [resetLink, setResetLink] = useState('');
 
-  // Fetch all applications
+  useEffect(() => {
+    fetchApplications();
+  }, []);
+
   const fetchApplications = async () => {
     setRefreshing(true);
     const { data } = await membershipService.getAllApplications();
@@ -35,142 +43,107 @@ const AdminMembershipApplications = () => {
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    fetchApplications();
+  const generateResetLink = async (email) => {
+    try {
+      // Generate a random token
+      const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      // Store token in database
+      const { error: tokenError } = await supabase
+        .from('password_reset_requests')
+        .insert({
+          email: email,
+          token: token,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        });
 
-    // Set up realtime subscription for this page
-    console.log('📡 Setting up realtime subscription for applications page...');
+      if (tokenError) throw tokenError;
 
-    const applicationsChannel = supabase
-      .channel('applications-page-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to all events
-          schema: 'public',
-          table: 'membership_applications'
-        },
-        (payload) => {
-          console.log('🔔 Applications page realtime event:', payload);
-          
-          // Update the applications list based on the event
-          setApplications(currentApps => {
-            let updatedApps;
-            
-            switch (payload.eventType) {
-              case 'INSERT':
-                // Add new application to the list
-                updatedApps = [payload.new, ...currentApps];
-                toast.success('New application received!', {
-                  icon: '📝',
-                  duration: 4000
-                });
-                break;
-                
-              case 'UPDATE':
-                // Update the changed application
-                updatedApps = currentApps.map(app => 
-                  app.id === payload.new.id ? payload.new : app
-                );
-                
-                // Show notification for status changes
-                const oldStatus = payload.old?.status;
-                const newStatus = payload.new?.status;
-                if (oldStatus !== newStatus) {
-                  toast.success(`Application ${newStatus}!`, {
-                    icon: newStatus === 'approved' ? '✅' : newStatus === 'rejected' ? '❌' : '📝'
-                  });
-                  
-                  // If the selected app was updated, update it
-                  if (selectedApp?.id === payload.new.id) {
-                    setSelectedApp(payload.new);
-                  }
-                }
-                break;
-                
-              case 'DELETE':
-                // Remove deleted application
-                updatedApps = currentApps.filter(app => app.id !== payload.old.id);
-                if (selectedApp?.id === payload.old.id) {
-                  setSelectedApp(null);
-                  setAdminNotes('');
-                }
-                toast.info('Application removed');
-                break;
-                
-              default:
-                updatedApps = currentApps;
-            }
-            
-            return updatedApps;
-          });
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Applications page channel status:', status);
-        setRealtimeStatus(status);
-        
-        if (status === 'SUBSCRIBED') {
-          toast.success('Live updates enabled', { icon: '🔔', duration: 2000 });
-        } else if (status === 'CHANNEL_ERROR') {
-          toast.error('Live updates failed - will poll manually');
-        }
-      });
+      // Create reset link
+      const link = `${window.location.origin}/reset-password?token=${token}`;
+      return link;
+    } catch (error) {
+      console.error('Error generating link:', error);
+      return null;
+    }
+  };
 
-    // Also listen for members changes (when approved members are added)
-    const membersChannel = supabase
-      .channel('members-page-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'members'
-        },
-        (payload) => {
-          console.log('🔔 New member added from application:', payload);
-          // You could refresh the applications list or show notification
-          if (payload.new?.email) {
-            // Find the application that was approved
-            const approvedApp = applications.find(
-              app => app.email === payload.new.email && app.status === 'approved'
-            );
-            
-            if (approvedApp) {
-              toast.success(`${approvedApp.full_name} is now a member!`, {
-                icon: '🎉',
-                duration: 5000
-              });
-            }
-          }
-        }
-      )
-      .subscribe();
+  const generateWelcomeEmail = (email, name, resetLink) => {
+    const subject = encodeURIComponent('Welcome to Feza Programming Club - Complete Your Registration');
+    const body = encodeURIComponent(`
+Hello ${name},
 
-    // Cleanup subscriptions
-    return () => {
-      console.log('🧹 Cleaning up applications page subscriptions...');
-      supabase.removeChannel(applicationsChannel);
-      supabase.removeChannel(membersChannel);
-    };
-  }, [selectedApp]); // Add selectedApp to dependency array for the UPDATE case
+Congratulations! Your membership request for Feza Programming Club has been approved.
+
+Click the link below to set up your password and complete your registration:
+
+${resetLink}
+
+This link will expire in 24 hours.
+
+Once you set up your password, you can log in at:
+${window.location.origin}/student/login
+
+We're excited to have you join our coding community! 🚀
+
+Best regards,
+Feza Programming Club Team
+    `);
+    return `mailto:${email}?subject=${subject}&body=${body}`;
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard!');
+  };
 
   const handleStatusUpdate = async (id, status) => {
     try {
       const { error } = await membershipService.updateStatus(id, status, adminNotes);
       if (error) throw error;
       
-      // No need to manually fetch - realtime will update
       toast.success(`Application ${status} successfully!`);
-      
-      // Clear selection if application was approved/rejected
-      if (status !== 'pending') {
-        setSelectedApp(null);
-        setAdminNotes('');
-      }
+      fetchApplications();
+      setSelectedApp(null);
+      setAdminNotes('');
     } catch (error) {
       toast.error('Failed to update status');
       console.error('Update error:', error);
+    }
+  };
+
+  const handleGenerateResetLink = async (app) => {
+    setGeneratingLink(true);
+    try {
+      const link = await generateResetLink(app.email);
+      if (link) {
+        setResetLink(link);
+        setShowLinkModal(true);
+      } else {
+        toast.error('Failed to generate reset link');
+      }
+    } catch (error) {
+      toast.error('Failed to generate reset link');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleSendSetupEmail = async (app) => {
+    setSendingEmail(true);
+    try {
+      const link = await generateResetLink(app.email);
+      if (link) {
+        const mailtoLink = generateWelcomeEmail(app.email, app.full_name, link);
+        window.open(mailtoLink);
+        toast.success(`Setup email opened for ${app.full_name}`);
+      } else {
+        toast.error('Failed to generate reset link');
+      }
+    } catch (error) {
+      toast.error('Failed to send email');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -228,20 +201,7 @@ const AdminMembershipApplications = () => {
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">Membership Applications</h1>
-            {realtimeStatus === 'SUBSCRIBED' && (
-              <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                Live
-              </span>
-            )}
-            {realtimeStatus === 'CHANNEL_ERROR' && (
-              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
-                Offline
-              </span>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold">Membership Applications</h1>
           <p className="text-gray-600">Review and manage club membership requests</p>
         </div>
         <div className="flex gap-2">
@@ -263,29 +223,26 @@ const AdminMembershipApplications = () => {
         </div>
       </div>
 
-      {/* Stats Cards with real-time updates */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow hover:shadow-md transition">
+        <div className="bg-white p-4 rounded-lg shadow">
           <div className="text-sm text-gray-500">Total Applications</div>
           <div className="text-2xl font-bold">{applications.length}</div>
         </div>
-        <div className="bg-yellow-50 p-4 rounded-lg shadow hover:shadow-md transition relative">
+        <div className="bg-yellow-50 p-4 rounded-lg shadow">
           <div className="text-sm text-yellow-600">Pending</div>
           <div className="text-2xl font-bold text-yellow-700">
             {applications.filter(a => a.status === 'pending').length}
           </div>
-          {applications.filter(a => a.status === 'pending').length > 0 && (
-            <span className="absolute -top-2 -right-2 w-4 h-4 bg-yellow-500 rounded-full animate-ping"></span>
-          )}
         </div>
-        <div className="bg-green-50 p-4 rounded-lg shadow hover:shadow-md transition">
+        <div className="bg-green-50 p-4 rounded-lg shadow">
           <div className="text-sm text-green-600">Approved</div>
           <div className="text-2xl font-bold text-green-700">
             {applications.filter(a => a.status === 'approved').length}
           </div>
-          <p className="text-xs text-green-500 mt-1">Auto-added to Members</p>
+          <p className="text-xs text-green-500 mt-1">Send setup link</p>
         </div>
-        <div className="bg-red-50 p-4 rounded-lg shadow hover:shadow-md transition">
+        <div className="bg-red-50 p-4 rounded-lg shadow">
           <div className="text-sm text-red-600">Rejected</div>
           <div className="text-2xl font-bold text-red-700">
             {applications.filter(a => a.status === 'rejected').length}
@@ -343,13 +300,10 @@ const AdminMembershipApplications = () => {
                 <div
                   key={app.id}
                   onClick={() => setSelectedApp(app)}
-                  className={`p-4 cursor-pointer hover:bg-gray-50 transition relative ${
+                  className={`p-4 cursor-pointer hover:bg-gray-50 transition ${
                     selectedApp?.id === app.id ? 'bg-primary-50 border-l-4 border-primary-600' : ''
                   }`}
                 >
-                  {app.status === 'pending' && (
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
-                  )}
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-semibold">{app.full_name}</h3>
@@ -396,7 +350,7 @@ const AdminMembershipApplications = () => {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <label className="text-xs text-gray-500 uppercase">Contact Information</label>
                   <p className="font-medium mt-2">{selectedApp.email}</p>
@@ -433,7 +387,7 @@ const AdminMembershipApplications = () => {
                 <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center gap-2 text-green-700">
                     <FaUserCheck />
-                    <span className="font-medium">This applicant has been added to club members</span>
+                    <span className="font-medium">Application approved. Send setup link to complete registration.</span>
                   </div>
                 </div>
               )}
@@ -445,53 +399,80 @@ const AdminMembershipApplications = () => {
                 <textarea
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
-                  placeholder="Add notes about this application (optional)..."
+                  placeholder="Add notes about this application..."
                   className="input-field"
                   rows="3"
                 />
               </div>
 
               {selectedApp.admin_notes && (
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="mb-6 p-4 bg-gray-100 rounded-lg">
                   <label className="text-xs text-gray-500 uppercase">Previous Notes</label>
                   <p className="mt-2">{selectedApp.admin_notes}</p>
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 {selectedApp.status === 'pending' && (
                   <>
                     <button
                       onClick={() => handleStatusUpdate(selectedApp.id, 'approved')}
-                      className="btn-primary flex items-center gap-2"
+                      className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center justify-center gap-2"
                     >
                       <FaCheck />
-                      Approve & Add to Members
+                      Approve
                     </button>
                     <button
                       onClick={() => handleStatusUpdate(selectedApp.id, 'rejected')}
-                      className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center gap-2"
+                      className="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center justify-center gap-2"
                     >
                       <FaTimes />
                       Reject
                     </button>
                   </>
                 )}
+                
+                {selectedApp.status === 'approved' && (
+                  <>
+                    <button
+                      onClick={() => handleSendSetupEmail(selectedApp)}
+                      disabled={sendingEmail}
+                      className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2"
+                    >
+                      {sendingEmail ? <FaSpinner className="animate-spin" /> : <FaEnvelope />}
+                      Send Setup Email
+                    </button>
+                    <button
+                      onClick={() => handleGenerateResetLink(selectedApp)}
+                      disabled={generatingLink}
+                      className="flex-1 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 flex items-center justify-center gap-2"
+                    >
+                      {generatingLink ? <FaSpinner className="animate-spin" /> : <FaKey />}
+                      Generate Reset Link
+                    </button>
+                  </>
+                )}
+                
                 <a
                   href={`mailto:${selectedApp.email}`}
-                  className="btn-secondary flex items-center gap-2"
+                  className="btn-secondary flex items-center justify-center gap-2"
                 >
                   <FaEnvelope />
-                  Send Email
+                  Compose Email
                 </a>
               </div>
 
               {selectedApp.status === 'approved' && (
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-700">
-                    <FaEye className="inline mr-2" />
-                    This member has been added to the Members list. You can view them in the Members section.
+                    <strong>How to complete registration:</strong>
                   </p>
+                  <ol className="text-sm text-blue-600 mt-2 list-decimal list-inside space-y-1">
+                    <li>Click "Send Setup Email" to send password setup link</li>
+                    <li>Or click "Generate Reset Link" to copy link manually</li>
+                    <li>Student clicks link to set password</li>
+                    <li>Student can then login to the platform</li>
+                  </ol>
                 </div>
               )}
             </div>
@@ -503,6 +484,35 @@ const AdminMembershipApplications = () => {
           )}
         </div>
       </div>
+
+      {/* Reset Link Modal */}
+      {showLinkModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <h3 className="text-xl font-bold mb-4">Password Setup Link</h3>
+            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+              <p className="text-sm font-medium mb-2">Share this link with the student:</p>
+              <p className="text-xs text-gray-600 break-all font-mono bg-white p-2 rounded border">{resetLink}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => copyToClipboard(resetLink)}
+                className="flex-1 bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700 flex items-center justify-center gap-2"
+              >
+                <FaCopy />
+                Copy Link
+              </button>
+              <button
+                onClick={() => setShowLinkModal(false)}
+                className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">Link expires in 24 hours.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -21,19 +21,15 @@ import ChallengesPage from './pages/ChallengesPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import CurriculumPage from './pages/CurriculumPage';
 import AchievementsPage from './pages/AchievementsPage';
+import ResetPassword from './pages/ResetPassword';
+import UpdatePassword from './pages/UpdatePassword';
 
 // Student Pages
 import StudentLogin from './pages/student/StudentLogin';
 import StudentRegister from './pages/student/StudentRegister';
 import StudentDashboard from './pages/student/StudentDashboard';
 import RegistrationRequest from './pages/student/RegistrationRequest';
-import ResetPassword from './pages/ResetPassword';
-import UpdatePassword from './pages/UpdatePassword';
-import ForcePasswordChange from './pages/ForcePasswordChange';
 import MemberProfile from './pages/student/MemberProfile';
-
-
-
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -44,9 +40,9 @@ import AdminGallery from './pages/admin/AdminGallery';
 import AdminMessages from './pages/admin/AdminMessages';
 import AdminMembershipApplications from './pages/admin/AdminMembershipApplications';
 import AdminChallenges from './pages/admin/AdminChallenges';
-import AdminStudentApprovals from './pages/admin/AdminStudentApprovals';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements';
 import AdminCurriculum from './pages/admin/AdminCurriculum';
+import ManualResetLink from './pages/admin/ResetLinkGenerator';
 
 function App() {
   useEffect(() => {
@@ -74,9 +70,6 @@ function App() {
               <Route path="/achievements" element={<AchievementsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/update-password" element={<UpdatePassword />} />
-              <Route path="/force-password-change" element={<ForcePasswordChange />} />
-
-
               
               {/* Student Auth Routes */}
               <Route path="/student/login" element={<StudentLogin />} />
@@ -89,7 +82,6 @@ function App() {
               <Route element={<PublicLayout />}>
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
                 <Route path="/student/profile" element={<MemberProfile />} />
-
               </Route>
             </Route>
 
@@ -104,9 +96,9 @@ function App() {
                 <Route path="/admin/messages" element={<AdminMessages />} />
                 <Route path="/admin/applications" element={<AdminMembershipApplications />} />
                 <Route path="/admin/challenges" element={<AdminChallenges />} />
-                
                 <Route path="/admin/announcements" element={<AdminAnnouncements />} />
                 <Route path="/admin/curriculum" element={<AdminCurriculum />} />
+                <Route path="/admin/reset-link-generator" element={<ManualResetLink />} />
               </Route>
             </Route>
           </Routes>

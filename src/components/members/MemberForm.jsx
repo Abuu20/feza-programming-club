@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { FaTimes, FaUpload, FaTrash } from 'react-icons/fa';
+import { FaTimes, FaUpload, FaTrash, FaGithub, FaLinkedin, FaTwitter, FaGlobe } from 'react-icons/fa';
 import { membersService } from '../../services/members';
-import { storageService } from '../../services/storage';
 import { supabase } from '../../services/supabase';
-import { BUCKETS } from '../../utils/constants';
 import toast from 'react-hot-toast';
 
 const MemberForm = ({ member, onClose }) => {
@@ -14,7 +12,11 @@ const MemberForm = ({ member, onClose }) => {
     role: member?.role || '',
     bio: member?.bio || '',
     display_order: member?.display_order || 0,
-    photo_url: member?.photo_url || ''
+    photo_url: member?.photo_url || '',
+    github: member?.github || '',
+    linkedin: member?.linkedin || '',
+    twitter: member?.twitter || '',
+    website: member?.website || ''
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(member?.photo_url || '');
@@ -29,18 +31,14 @@ const MemberForm = ({ member, onClose }) => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Check file size (max 2MB)
       if (file.size > 2 * 1024 * 1024) {
         toast.error('Image must be less than 2MB');
         return;
       }
-      
-      // Check file type
       if (!file.type.startsWith('image/')) {
         toast.error('Please upload an image file');
         return;
       }
-      
       setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -62,23 +60,16 @@ const MemberForm = ({ member, onClose }) => {
     setUploadingImage(true);
     
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || 'anonymous';
-      
-      // Generate unique filename
       const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${userId}-${Date.now()}.${fileExt}`;
+      const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `member-photos/${fileName}`;
 
-      // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from('member-photos')
         .upload(filePath, imageFile);
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('member-photos')
         .getPublicUrl(filePath);
@@ -152,7 +143,6 @@ const MemberForm = ({ member, onClose }) => {
             </label>
             
             <div className="flex flex-col items-center gap-4">
-              {/* Image Preview */}
               {imagePreview ? (
                 <div className="relative">
                   <img
@@ -174,7 +164,6 @@ const MemberForm = ({ member, onClose }) => {
                 </div>
               )}
               
-              {/* Upload Button */}
               <label className="cursor-pointer">
                 <div className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition flex items-center gap-2">
                   <FaUpload size={14} />
@@ -193,7 +182,7 @@ const MemberForm = ({ member, onClose }) => {
             </div>
           </div>
 
-          {/* Form Fields */}
+          {/* Basic Info */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Name *
@@ -235,6 +224,69 @@ const MemberForm = ({ member, onClose }) => {
               className="input-field"
               placeholder="Short biography"
             />
+          </div>
+
+          {/* Social Links */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <FaGithub className="text-gray-600" />
+                GitHub
+              </label>
+              <input
+                type="url"
+                name="github"
+                value={formData.github}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="https://github.com/username"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <FaLinkedin className="text-gray-600" />
+                LinkedIn
+              </label>
+              <input
+                type="url"
+                name="linkedin"
+                value={formData.linkedin}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="https://linkedin.com/in/username"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <FaTwitter className="text-gray-600" />
+                Twitter
+              </label>
+              <input
+                type="url"
+                name="twitter"
+                value={formData.twitter}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="https://twitter.com/username"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <FaGlobe className="text-gray-600" />
+                Website
+              </label>
+              <input
+                type="url"
+                name="website"
+                value={formData.website}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="https://yourwebsite.com"
+              />
+            </div>
           </div>
 
           <div>

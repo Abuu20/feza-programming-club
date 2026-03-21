@@ -42,7 +42,7 @@ import AdminMembershipApplications from './pages/admin/AdminMembershipApplicatio
 import AdminChallenges from './pages/admin/AdminChallenges';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements';
 import AdminCurriculum from './pages/admin/AdminCurriculum';
-import ManualResetLink from './pages/admin/ResetLinkGenerator';
+import ResetLinkGenerator from './pages/admin/ResetLinkGenerator';
 
 function App() {
   useEffect(() => {
@@ -98,7 +98,7 @@ function App() {
                 <Route path="/admin/challenges" element={<AdminChallenges />} />
                 <Route path="/admin/announcements" element={<AdminAnnouncements />} />
                 <Route path="/admin/curriculum" element={<AdminCurriculum />} />
-                <Route path="/admin/reset-link-generator" element={<ManualResetLink />} />
+                <Route path="/admin/reset-link-generator" element={<ResetLinkGenerator />} />
               </Route>
             </Route>
           </Routes>

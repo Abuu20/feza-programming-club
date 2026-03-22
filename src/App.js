@@ -23,6 +23,8 @@ import CurriculumPage from './pages/CurriculumPage';
 import AchievementsPage from './pages/AchievementsPage';
 import ResetPassword from './pages/ResetPassword';
 import UpdatePassword from './pages/UpdatePassword';
+import WelcomeModal from './components/common/WelcomeModal';
+
 
 // Student Pages
 import StudentLogin from './pages/student/StudentLogin';
@@ -54,6 +56,7 @@ function App() {
       <Router>
         <AuthProvider>
           <Toaster position="top-right" />
+            <WelcomeModal />
           <Routes>
             {/* Public Routes */}
             <Route element={<PublicLayout />}>

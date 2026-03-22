@@ -9,7 +9,7 @@ import {
   ChatBubbleLeftRightIcon,
   ArrowRightIcon
 } from '@heroicons/react/24/outline';
-import { FaBullhorn, FaWhatsapp, FaCalendar, FaClock } from 'react-icons/fa';
+import { FaBullhorn, FaWhatsapp, FaCalendar, FaClock, FaGraduationCap, FaCode,FaTrophy, FaUser  } from 'react-icons/fa';
 import { announcementsService } from '../services/announcements';
 import { useActivities } from '../hooks/useActivities';
 import { formatDate } from '../utils/helpers';
@@ -293,6 +293,73 @@ const HomePage = () => {
           </div>
         </div>
       </section>
+
+        {/* Feature Highlights */}
+        <section className="py-8 bg-gradient-to-r from-primary-50 to-secondary-50">
+          <div className="container-custom">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up">
+                <div className="flex items-center gap-3">
+                  <div className="bg-green-100 p-3 rounded-full animate-pulse">
+                    <FaGraduationCap className="text-green-600 text-xl" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+                      <span className="text-sm font-semibold text-gray-700">Curriculum</span>
+                    </div>
+                    <p className="text-xs text-gray-500">100+ lessons</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-100">
+                <div className="flex items-center gap-3">
+                  <div className="bg-purple-100 p-3 rounded-full animate-pulse">
+                    <FaCode className="text-purple-600 text-xl" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full">UPDATED</span>
+                      <span className="text-sm font-semibold text-gray-700">Python Lab</span>
+                    </div>
+                    <p className="text-xs text-gray-500">New editor features</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-200">
+                <div className="flex items-center gap-3">
+                  <div className="bg-orange-100 p-3 rounded-full animate-pulse">
+                    <FaTrophy className="text-orange-600 text-xl" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+                      <span className="text-sm font-semibold text-gray-700">Challenges</span>
+                    </div>
+                    <p className="text-xs text-gray-500">Earn points & badges</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-300">
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-100 p-3 rounded-full animate-pulse">
+                    <FaUser className="text-blue-600 text-xl" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+                      <span className="text-sm font-semibold text-gray-700">Member Profiles</span>
+                    </div>
+                    <p className="text-xs text-gray-500">Upload your photo</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
       {/* Latest Activities Section */}
       <section className="py-20 bg-white">

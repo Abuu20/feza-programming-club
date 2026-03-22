@@ -104,7 +104,7 @@ const AdminMembers = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
+               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {members.map((member) => (
@@ -121,13 +121,13 @@ const AdminMembers = () => {
                         <span className="text-gray-500 text-sm">{member.name?.charAt(0) || '?'}</span>
                       </div>
                     )}
-                  </td>
+                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">{member.name}</div>
-                  </td>
+                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-500">{member.email || '-'}</div>
-                  </td>
+                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">{member.role || 'Member'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -139,7 +139,7 @@ const AdminMembers = () => {
                     }`}>
                       {member.status || 'active'}
                     </span>
-                  </td>
+                   </td>
                   <td className="px-6 py-4 text-sm font-medium">
                     <div className="flex gap-3">
                       <button
@@ -165,7 +165,7 @@ const AdminMembers = () => {
                         <FaTrash size={16} />
                       </button>
                     </div>
-                  </td>
+                   </td>
                 </tr>
               ))}
             </tbody>

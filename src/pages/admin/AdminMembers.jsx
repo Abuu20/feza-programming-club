@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaEdit, FaTrash, FaPlus, FaKey, FaSpinner, FaGithub, FaLinkedin, FaTwitter, FaGlobe } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaKey, FaSpinner } from 'react-icons/fa';
 import { membersService } from '../../services/members';
 import { supabase } from '../../services/supabase';
 import Loader from '../../components/common/Loader';
@@ -12,6 +12,14 @@ const AdminMembers = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [sendingEmail, setSendingEmail] = useState(null);
+
+  // Get the base URL (works for both localhost and production)
+  const getBaseUrl = () => {
+    if (process.env.NODE_ENV === 'production') {
+      return 'https://feza-programming-club.vercel.app'\;
+    }
+    return window.location.origin;
+  };
 
   useEffect(() => {
     fetchMembers();
@@ -47,8 +55,10 @@ const AdminMembers = () => {
     setSendingEmail(member.id);
 
     try {
+      const baseUrl = getBaseUrl();
+      
       const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
-        redirectTo: `${window.location.origin}/update-password`,
+        redirectTo: `${baseUrl}/update-password`,
       });
 
       if (error) throw error;
@@ -56,7 +66,7 @@ const AdminMembers = () => {
       toast.success(`Password reset email sent to ${member.name}! Check their inbox/spam folder.`);
     } catch (error) {
       console.error('Error:', error);
-      toast.error(error.message || 'Failed to send reset email');
+      toast.error(error.message || 'Failed to send reset email. Make sure the user has an auth account.');
     } finally {
       setSendingEmail(null);
     }
@@ -94,7 +104,7 @@ const AdminMembers = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-               </tr>
+              </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {members.map((member) => (
@@ -114,11 +124,6 @@ const AdminMembers = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">{member.name}</div>
-                    {member.github && (
-                      <div className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                        <FaGithub size={10} /> GitHub
-                      </div>
-                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-500">{member.email || '-'}</div>

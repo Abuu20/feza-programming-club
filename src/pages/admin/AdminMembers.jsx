@@ -16,7 +16,7 @@ const AdminMembers = () => {
   // Get the base URL (works for both localhost and production)
   const getBaseUrl = () => {
     if (process.env.NODE_ENV === 'production') {
-      return 'https://feza-programming-club.vercel.app'\;
+      return 'https://feza-programming-club.vercel.app';
     }
     return window.location.origin;
   };

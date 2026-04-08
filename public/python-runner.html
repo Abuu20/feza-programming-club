@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Python Runner</title>
+    <script src="https://skulpt.org/js/skulpt.min.js"></script>
+    <script src="https://skulpt.org/js/skulpt-stdlib.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        #output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .error {
+            color: #f48771;
+        }
+    </style>
+</head>
+<body>
+    <div id="output"></div>
+    <script>
+        let inputResolver = null;
+        let pendingInputs = [];
+        
+        // Configure Skulpt
+        Sk.configure({
+            output: function(text) {
+                // Display output in the div
+                const outputDiv = document.getElementById('output');
+                outputDiv.innerText += text;
+                
+                // Also send to parent
+                window.parent.postMessage({
+                    type: 'output',
+                    data: text
+                }, '*');
+            },
+            read: function(filename) {
+                return Sk.builtinFiles.files[filename];
+            },
+            inputfun: function(prompt) {
+                // Return a promise that resolves when input is provided
+                return new Promise((resolve) => {
+                    // Store the resolver
+                    inputResolver = resolve;
+                    
+                    // Send input request to parent
+                    window.parent.postMessage({
+                        type: 'input',
+                        data: prompt || 'Input:'
+                    }, '*');
+                });
+            },
+            inputfunTakesPrompt: true
+        });
+
+        // Listen for code execution requests
+        window.addEventListener('message', async function(event) {
+            if (event.data.type === 'execute') {
+                const code = event.data.code;
+                
+                // Clear output
+                const outputDiv = document.getElementById('output');
+                outputDiv.innerText = '';
+                
+                try {
+                    // Run the Python code
+                    await Sk.misceval.asyncToPromise(function() {
+                        return Sk.importMainWithBody('<stdin>', false, code, false);
+                    });
+                    
+                    // Send completion message with output
+                    window.parent.postMessage({
+                        type: 'complete',
+                        output: outputDiv.innerText
+                    }, '*');
+                } catch (err) {
+                    console.error('Python error:', err);
+                    window.parent.postMessage({
+                        type: 'error',
+                        error: err.toString()
+                    }, '*');
+                }
+            }
+            
+            // Handle input responses
+            if (event.data.type === 'inputResponse') {
+                if (inputResolver) {
+                    // Resolve the pending input promise
+                    inputResolver(event.data.value);
+                    inputResolver = null;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

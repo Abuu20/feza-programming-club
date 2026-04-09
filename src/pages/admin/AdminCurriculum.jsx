@@ -49,10 +49,10 @@ const AdminCurriculum = () => {
     difficulty: 'beginner',
     order_number: 0,
     estimated_time: 30,
-    prerequisites: [], // Changed to array
-    learning_outcomes: [], // Changed to array
-    key_takeaways: [], // Changed to array
-    common_mistakes: [], // Changed to array
+    prerequisites: '',  // stored as string while editing; converted to array on save
+    learning_outcomes: '',
+    key_takeaways: '',
+    common_mistakes: '',
     code_examples: [],
     is_published: true,
     module_id: null
@@ -230,10 +230,10 @@ const AdminCurriculum = () => {
       // Parse all array fields for each lesson
       const parsedLessons = (lessonsData || []).map(lesson => ({
         ...lesson,
-        prerequisites: safelyParseArray(lesson.prerequisites),
-        learning_outcomes: safelyParseArray(lesson.learning_outcomes),
-        key_takeaways: safelyParseArray(lesson.key_takeaways),
-        common_mistakes: safelyParseArray(lesson.common_mistakes),
+        prerequisites: arrayToString(safelyParseArray(lesson.prerequisites)),
+        learning_outcomes: arrayToString(safelyParseArray(lesson.learning_outcomes)),
+        key_takeaways: arrayToString(safelyParseArray(lesson.key_takeaways)),
+        common_mistakes: arrayToString(safelyParseArray(lesson.common_mistakes)),
         code_examples: safelyParseArray(lesson.code_examples)
       }));
 
@@ -388,10 +388,10 @@ const AdminCurriculum = () => {
       difficulty: 'beginner',
       order_number: 0,
       estimated_time: 30,
-      prerequisites: [],
-      learning_outcomes: [],
-      key_takeaways: [],
-      common_mistakes: [],
+      prerequisites: '',
+      learning_outcomes: '',
+      key_takeaways: '',
+      common_mistakes: '',
       code_examples: [],
       is_published: true,
       module_id: selectedModuleId
@@ -409,10 +409,10 @@ const AdminCurriculum = () => {
         difficulty: lesson.difficulty || 'beginner',
         order_number: lesson.order_number || 0,
         estimated_time: lesson.estimated_time || 30,
-        prerequisites: safelyParseArray(lesson.prerequisites),
-        learning_outcomes: safelyParseArray(lesson.learning_outcomes),
-        key_takeaways: safelyParseArray(lesson.key_takeaways),
-        common_mistakes: safelyParseArray(lesson.common_mistakes),
+        prerequisites: arrayToString(safelyParseArray(lesson.prerequisites)),
+        learning_outcomes: arrayToString(safelyParseArray(lesson.learning_outcomes)),
+        key_takeaways: arrayToString(safelyParseArray(lesson.key_takeaways)),
+        common_mistakes: arrayToString(safelyParseArray(lesson.common_mistakes)),
         code_examples: safelyParseArray(lesson.code_examples),
         is_published: lesson.is_published !== false,
         module_id: moduleId
@@ -438,21 +438,11 @@ const AdminCurriculum = () => {
 
     try {
       // Ensure all array fields are proper arrays
-      const prerequisites = Array.isArray(lessonForm.prerequisites) 
-        ? lessonForm.prerequisites.filter(p => p && p.trim())
-        : [];
-      
-      const learningOutcomes = Array.isArray(lessonForm.learning_outcomes) 
-        ? lessonForm.learning_outcomes.filter(l => l && l.trim())
-        : [];
-      
-      const keyTakeaways = Array.isArray(lessonForm.key_takeaways) 
-        ? lessonForm.key_takeaways.filter(k => k && k.trim())
-        : [];
-      
-      const commonMistakes = Array.isArray(lessonForm.common_mistakes) 
-        ? lessonForm.common_mistakes.filter(c => c && c.trim())
-        : [];
+      // Convert string fields back to arrays for saving
+      const prerequisites = stringToArray(lessonForm.prerequisites);
+      const learningOutcomes = stringToArray(lessonForm.learning_outcomes);
+      const keyTakeaways = stringToArray(lessonForm.key_takeaways);
+      const commonMistakes = stringToArray(lessonForm.common_mistakes);
       
       const codeExamples = Array.isArray(lessonForm.code_examples) 
         ? lessonForm.code_examples.filter(example => example && (example.code || example.description))
@@ -1282,11 +1272,11 @@ const AdminCurriculum = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Prerequisites (one per line)</label>
                     <textarea
-                      rows="3"
+                      rows="5"
                       placeholder="Variables&#10;Basic Python syntax&#10;Functions"
-                      value={arrayToString(lessonForm.prerequisites)}
-                      onChange={e => setLessonForm({...lessonForm, prerequisites: stringToArray(e.target.value)})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+                      value={lessonForm.prerequisites}
+                      onChange={e => setLessonForm({...lessonForm, prerequisites: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
                     />
                   </div>
                   
@@ -1307,33 +1297,33 @@ const AdminCurriculum = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Learning Outcomes (one per line)</label>
                     <textarea
-                      rows="4"
+                      rows="6"
                       placeholder="Understand what variables are&#10;Learn how to assign values&#10;Practice using different data types"
-                      value={arrayToString(lessonForm.learning_outcomes)}
-                      onChange={e => setLessonForm({...lessonForm, learning_outcomes: stringToArray(e.target.value)})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+                      value={lessonForm.learning_outcomes}
+                      onChange={e => setLessonForm({...lessonForm, learning_outcomes: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
                     />
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Key Takeaways (one per line)</label>
                     <textarea
-                      rows="3"
+                      rows="5"
                       placeholder="Variables store data in memory&#10;Python has dynamic typing&#10;Use = to assign values"
-                      value={arrayToString(lessonForm.key_takeaways)}
-                      onChange={e => setLessonForm({...lessonForm, key_takeaways: stringToArray(e.target.value)})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+                      value={lessonForm.key_takeaways}
+                      onChange={e => setLessonForm({...lessonForm, key_takeaways: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
                     />
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Common Mistakes to Avoid (one per line)</label>
                     <textarea
-                      rows="3"
+                      rows="5"
                       placeholder="Forgetting to define variables before using them&#10;Using incorrect variable names&#10;Mixing data types incorrectly"
-                      value={arrayToString(lessonForm.common_mistakes)}
-                      onChange={e => setLessonForm({...lessonForm, common_mistakes: stringToArray(e.target.value)})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
+                      value={lessonForm.common_mistakes}
+                      onChange={e => setLessonForm({...lessonForm, common_mistakes: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
                     />
                   </div>
                 </div>

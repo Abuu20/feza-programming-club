@@ -49,10 +49,10 @@ const AdminCurriculum = () => {
     difficulty: 'beginner',
     order_number: 0,
     estimated_time: 30,
-    prerequisites: '',  // stored as string while editing; converted to array on save
-    learning_outcomes: '',
-    key_takeaways: '',
-    common_mistakes: '',
+    prerequisites: [], // Changed to array
+    learning_outcomes: [], // Changed to array
+    key_takeaways: [], // Changed to array
+    common_mistakes: [], // Changed to array
     code_examples: [],
     is_published: true,
     module_id: null
@@ -230,10 +230,10 @@ const AdminCurriculum = () => {
       // Parse all array fields for each lesson
       const parsedLessons = (lessonsData || []).map(lesson => ({
         ...lesson,
-        prerequisites: arrayToString(safelyParseArray(lesson.prerequisites)),
-        learning_outcomes: arrayToString(safelyParseArray(lesson.learning_outcomes)),
-        key_takeaways: arrayToString(safelyParseArray(lesson.key_takeaways)),
-        common_mistakes: arrayToString(safelyParseArray(lesson.common_mistakes)),
+        prerequisites: safelyParseArray(lesson.prerequisites),
+        learning_outcomes: safelyParseArray(lesson.learning_outcomes),
+        key_takeaways: safelyParseArray(lesson.key_takeaways),
+        common_mistakes: safelyParseArray(lesson.common_mistakes),
         code_examples: safelyParseArray(lesson.code_examples)
       }));
 
@@ -388,10 +388,10 @@ const AdminCurriculum = () => {
       difficulty: 'beginner',
       order_number: 0,
       estimated_time: 30,
-      prerequisites: '',
-      learning_outcomes: '',
-      key_takeaways: '',
-      common_mistakes: '',
+      prerequisites: [],
+      learning_outcomes: [],
+      key_takeaways: [],
+      common_mistakes: [],
       code_examples: [],
       is_published: true,
       module_id: selectedModuleId
@@ -409,10 +409,10 @@ const AdminCurriculum = () => {
         difficulty: lesson.difficulty || 'beginner',
         order_number: lesson.order_number || 0,
         estimated_time: lesson.estimated_time || 30,
-        prerequisites: arrayToString(safelyParseArray(lesson.prerequisites)),
-        learning_outcomes: arrayToString(safelyParseArray(lesson.learning_outcomes)),
-        key_takeaways: arrayToString(safelyParseArray(lesson.key_takeaways)),
-        common_mistakes: arrayToString(safelyParseArray(lesson.common_mistakes)),
+        prerequisites: safelyParseArray(lesson.prerequisites),
+        learning_outcomes: safelyParseArray(lesson.learning_outcomes),
+        key_takeaways: safelyParseArray(lesson.key_takeaways),
+        common_mistakes: safelyParseArray(lesson.common_mistakes),
         code_examples: safelyParseArray(lesson.code_examples),
         is_published: lesson.is_published !== false,
         module_id: moduleId
@@ -438,11 +438,21 @@ const AdminCurriculum = () => {
 
     try {
       // Ensure all array fields are proper arrays
-      // Convert string fields back to arrays for saving
-      const prerequisites = stringToArray(lessonForm.prerequisites);
-      const learningOutcomes = stringToArray(lessonForm.learning_outcomes);
-      const keyTakeaways = stringToArray(lessonForm.key_takeaways);
-      const commonMistakes = stringToArray(lessonForm.common_mistakes);
+      const prerequisites = Array.isArray(lessonForm.prerequisites) 
+        ? lessonForm.prerequisites.filter(p => p && p.trim())
+        : [];
+      
+      const learningOutcomes = Array.isArray(lessonForm.learning_outcomes) 
+        ? lessonForm.learning_outcomes.filter(l => l && l.trim())
+        : [];
+      
+      const keyTakeaways = Array.isArray(lessonForm.key_takeaways) 
+        ? lessonForm.key_takeaways.filter(k => k && k.trim())
+        : [];
+      
+      const commonMistakes = Array.isArray(lessonForm.common_mistakes) 
+        ? lessonForm.common_mistakes.filter(c => c && c.trim())
+        : [];
       
       const codeExamples = Array.isArray(lessonForm.code_examples) 
         ? lessonForm.code_examples.filter(example => example && (example.code || example.description))
@@ -555,65 +565,87 @@ const AdminCurriculum = () => {
   };
 
   // ==================== IMAGE ATTACHMENTS ====================
-  const handleImageUpload = async (file, lessonId) => {
-    if (!file) return;
-    
-    if (!file.type.startsWith('image/')) {
-      toast.error('Only image files are allowed');
-      return;
-    }
-    
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be less than 5MB');
-      return;
+  const handleImageUpload = async (files, lessonId) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+
+    // Validate all files first
+    for (const file of fileArray) {
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        toast.error(`"${file.name}" is not an image or PDF`);
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`"${file.name}" exceeds the 10MB limit`);
+        return;
+      }
     }
 
     setUploadingImage(true);
-    setPreviewImage(URL.createObjectURL(file));
-    
+    const toastId = toast.loading(`Uploading ${fileArray.length} file${fileArray.length > 1 ? 's' : ''}...`);
+
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${lessonId}-${Date.now()}.${fileExt}`;
-      const filePath = `lesson-images/${fileName}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('curriculum')
-        .upload(filePath, file);
-      
-      if (uploadError) throw uploadError;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('curriculum')
-        .getPublicUrl(filePath);
-      
       const currentAttachments = attachments[lessonId] || [];
-      
-      const { data: insertData, error: insertError } = await supabase
-        .from('lesson_attachments')
-        .insert({
-          lesson_id: lessonId,
-          type: 'image',
-          title: file.name,
-          url: publicUrl,
-          description: '',
-          display_order: currentAttachments.length
-        })
-        .select();
-      
-      if (insertError) throw insertError;
-      
-      toast.success('Image uploaded successfully');
-      
+      let orderOffset = currentAttachments.length;
+      let successCount = 0;
+
+      for (const file of fileArray) {
+        try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${lessonId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+          const filePath = `lesson-images/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('curriculum')
+            .upload(filePath, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('curriculum')
+            .getPublicUrl(filePath);
+
+          const fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+
+          const { error: insertError } = await supabase
+            .from('lesson_attachments')
+            .insert({
+              lesson_id: lessonId,
+              type: fileType,
+              title: file.name,
+              url: publicUrl,
+              description: '',
+              display_order: orderOffset++
+            });
+
+          if (insertError) throw insertError;
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to upload ${file.name}:`, err);
+          toast.error(`Failed to upload "${file.name}"`);
+        }
+      }
+
+      // Refresh attachments list once after all uploads
       const { data: newAttachments } = await supabase
         .from('lesson_attachments')
         .select('*')
         .eq('lesson_id', lessonId)
         .order('display_order', { ascending: true });
-      
+
       setAttachments(prev => ({ ...prev, [lessonId]: newAttachments || [] }));
+
+      toast.dismiss(toastId);
+      if (successCount === fileArray.length) {
+        toast.success(`${successCount} file${successCount > 1 ? 's' : ''} uploaded successfully`);
+      } else {
+        toast.success(`${successCount} of ${fileArray.length} files uploaded`);
+      }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error(error.message || 'Failed to upload image');
+      toast.dismiss(toastId);
+      toast.error(error.message || 'Upload failed');
     } finally {
       setUploadingImage(false);
       setPreviewImage(null);
@@ -1040,14 +1072,16 @@ const AdminCurriculum = () => {
                                     onClick={() => {
                                       const input = document.createElement('input');
                                       input.type = 'file';
-                                      input.accept = 'image/*';
-                                      input.onchange = (e) => handleImageUpload(e.target.files[0], lesson.id);
+                                      input.accept = 'image/*,application/pdf';
+                                      input.multiple = true;
+                                      input.onchange = (e) => handleImageUpload(e.target.files, lesson.id);
                                       input.click();
                                     }}
-                                    className="w-12 h-12 border-2 border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 hover:text-primary-500 hover:border-primary-500 transition"
-                                    title="Add Image"
+                                    disabled={uploadingImage}
+                                    className="w-12 h-12 border-2 border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 hover:text-primary-500 hover:border-primary-500 transition disabled:opacity-50"
+                                    title="Add files (images or PDFs)"
                                   >
-                                    <FaUpload />
+                                    {uploadingImage ? <FaSpinner className="animate-spin" /> : <FaUpload />}
                                   </button>
                                 </div>
                               )}
@@ -1058,13 +1092,15 @@ const AdminCurriculum = () => {
                                     onClick={() => {
                                       const input = document.createElement('input');
                                       input.type = 'file';
-                                      input.accept = 'image/*';
-                                      input.onchange = (e) => handleImageUpload(e.target.files[0], lesson.id);
+                                      input.accept = 'image/*,application/pdf';
+                                      input.multiple = true;
+                                      input.onchange = (e) => handleImageUpload(e.target.files, lesson.id);
                                       input.click();
                                     }}
-                                    className="text-xs text-gray-400 hover:text-primary-500 flex items-center gap-1"
+                                    disabled={uploadingImage}
+                                    className="text-xs text-gray-400 hover:text-primary-500 flex items-center gap-1 disabled:opacity-50"
                                   >
-                                    <FaUpload size={10} /> Add image
+                                    {uploadingImage ? <><FaSpinner className="animate-spin" size={10} /> Uploading...</> : <><FaUpload size={10} /> Add images / PDFs</>}
                                   </button>
                                 </div>
                               )}
@@ -1272,11 +1308,11 @@ const AdminCurriculum = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Prerequisites (one per line)</label>
                     <textarea
-                      rows="5"
+                      rows="3"
                       placeholder="Variables&#10;Basic Python syntax&#10;Functions"
-                      value={lessonForm.prerequisites}
-                      onChange={e => setLessonForm({...lessonForm, prerequisites: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
+                      value={arrayToString(lessonForm.prerequisites)}
+                      onChange={e => setLessonForm({...lessonForm, prerequisites: stringToArray(e.target.value)})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
                     />
                   </div>
                   
@@ -1297,33 +1333,33 @@ const AdminCurriculum = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Learning Outcomes (one per line)</label>
                     <textarea
-                      rows="6"
+                      rows="4"
                       placeholder="Understand what variables are&#10;Learn how to assign values&#10;Practice using different data types"
-                      value={lessonForm.learning_outcomes}
-                      onChange={e => setLessonForm({...lessonForm, learning_outcomes: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
+                      value={arrayToString(lessonForm.learning_outcomes)}
+                      onChange={e => setLessonForm({...lessonForm, learning_outcomes: stringToArray(e.target.value)})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
                     />
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Key Takeaways (one per line)</label>
                     <textarea
-                      rows="5"
+                      rows="3"
                       placeholder="Variables store data in memory&#10;Python has dynamic typing&#10;Use = to assign values"
-                      value={lessonForm.key_takeaways}
-                      onChange={e => setLessonForm({...lessonForm, key_takeaways: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
+                      value={arrayToString(lessonForm.key_takeaways)}
+                      onChange={e => setLessonForm({...lessonForm, key_takeaways: stringToArray(e.target.value)})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
                     />
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Common Mistakes to Avoid (one per line)</label>
                     <textarea
-                      rows="5"
+                      rows="3"
                       placeholder="Forgetting to define variables before using them&#10;Using incorrect variable names&#10;Mixing data types incorrectly"
-                      value={lessonForm.common_mistakes}
-                      onChange={e => setLessonForm({...lessonForm, common_mistakes: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm resize-y"
+                      value={arrayToString(lessonForm.common_mistakes)}
+                      onChange={e => setLessonForm({...lessonForm, common_mistakes: stringToArray(e.target.value)})}
+                      className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
                     />
                   </div>
                 </div>

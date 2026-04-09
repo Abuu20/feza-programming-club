@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { membershipService } from '../../services/membership';
 import { supabase } from '../../services/supabase';
 import { 
   FaCheck, 
@@ -37,10 +36,21 @@ const AdminMembershipApplications = () => {
 
   const fetchApplications = async () => {
     setRefreshing(true);
-    const { data } = await membershipService.getAllApplications();
-    setApplications(data || []);
-    setLoading(false);
-    setRefreshing(false);
+    try {
+      const { data, error } = await supabase
+        .from('registration_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setApplications(data || []);
+    } catch (error) {
+      console.error('Error fetching applications:', error);
+      toast.error('Failed to load applications: ' + error.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   const generateResetLink = async (email) => {
@@ -98,17 +108,76 @@ Feza Programming Club Team
   };
 
   const handleStatusUpdate = async (id, status) => {
-    try {
-      const { error } = await membershipService.updateStatus(id, status, adminNotes);
-      if (error) throw error;
-      
-      toast.success(`Application ${status} successfully!`);
-      fetchApplications();
-      setSelectedApp(null);
-      setAdminNotes('');
-    } catch (error) {
-      toast.error('Failed to update status');
-      console.error('Update error:', error);
+    // Rejection — just update the status in the table, no auth account needed
+    if (status === 'rejected') {
+      try {
+        const { error } = await supabase
+          .from('registration_requests')
+          .update({
+            status: 'rejected',
+            admin_notes: adminNotes || null,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+        toast.success('Application rejected');
+        fetchApplications();
+        setSelectedApp(null);
+        setAdminNotes('');
+      } catch (error) {
+        toast.error('Failed to update status');
+        console.error('Update error:', error);
+      }
+      return;
+    }
+
+    // Approval — call the Edge Function which creates auth.users + members + sends reset email
+    if (status === 'approved') {
+      setSendingEmail(true);
+      try {
+        const app = selectedApp;
+        const { data: { session } } = await supabase.auth.getSession();
+
+        const response = await fetch(
+          `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/approve-member`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`,
+              'apikey': process.env.REACT_APP_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({
+              application_id: app.id,
+              full_name: app.full_name,
+              email: app.email,
+              school: app.school || '',
+              grade: app.grade || '',
+              phone: app.phone || '',
+              admin_notes: adminNotes || '',
+            }),
+          }
+        );
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Approval failed');
+
+        if (result.email_sent) {
+          toast.success(`✅ ${app.full_name} approved! Account created and password setup email sent.`);
+        } else {
+          toast.success(`✅ ${app.full_name} approved! Account created. Send them the setup link manually.`);
+        }
+
+        fetchApplications();
+        setSelectedApp(null);
+        setAdminNotes('');
+      } catch (error) {
+        toast.error(error.message || 'Failed to approve application');
+        console.error('Approve error:', error);
+      } finally {
+        setSendingEmail(false);
+      }
     }
   };
 
@@ -175,7 +244,6 @@ Feza Programming Club Team
       app.school || '',
       app.grade || '',
       app.age || '',
-      app.experience_level,
       app.status,
       formatDate(app.created_at),
       app.reason?.replace(/,/g, ';') || ''
@@ -317,12 +385,14 @@ Feza Programming Club Team
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
-                    <span className={`px-2 py-1 rounded-full text-xs ${getExperienceBadge(app.experience_level)}`}>
-                      {app.experience_level}
-                    </span>
                     {app.school && (
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">
                         {app.school}
+                      </span>
+                    )}
+                    {app.grade && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                        {app.grade}
                       </span>
                     )}
                   </div>
@@ -365,18 +435,7 @@ Feza Programming Club Team
                 </div>
               </div>
 
-              <div className="mb-6">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <label className="text-xs text-gray-500 uppercase">Experience Level</label>
-                  <p className="mt-2">
-                    <span className={`px-3 py-1 rounded-full text-sm ${getExperienceBadge(selectedApp.experience_level)}`}>
-                      {selectedApp.experience_level}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-6">
+<div className="mb-6">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <label className="text-xs text-gray-500 uppercase">Why they want to join</label>
                   <p className="mt-2 whitespace-pre-wrap">{selectedApp.reason}</p>
@@ -385,10 +444,14 @@ Feza Programming Club Team
 
               {selectedApp.status === 'approved' && (
                 <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center gap-2 text-green-700">
+                  <div className="flex items-center gap-2 text-green-700 mb-1">
                     <FaUserCheck />
-                    <span className="font-medium">Application approved. Send setup link to complete registration.</span>
+                    <span className="font-medium">Account created in auth.users + members table.</span>
                   </div>
+                  <p className="text-sm text-green-600">
+                    A password setup email was sent automatically. If the student didn't receive it,
+                    use "Resend Setup Email" below.
+                  </p>
                 </div>
               )}
 
@@ -417,10 +480,11 @@ Feza Programming Club Team
                   <>
                     <button
                       onClick={() => handleStatusUpdate(selectedApp.id, 'approved')}
-                      className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center justify-center gap-2"
+                      disabled={sendingEmail}
+                      className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center justify-center gap-2 disabled:opacity-60"
                     >
-                      <FaCheck />
-                      Approve
+                      {sendingEmail ? <FaSpinner className="animate-spin" /> : <FaCheck />}
+                      {sendingEmail ? 'Creating account...' : 'Approve & Create Account'}
                     </button>
                     <button
                       onClick={() => handleStatusUpdate(selectedApp.id, 'rejected')}
@@ -433,24 +497,14 @@ Feza Programming Club Team
                 )}
                 
                 {selectedApp.status === 'approved' && (
-                  <>
-                    <button
-                      onClick={() => handleSendSetupEmail(selectedApp)}
-                      disabled={sendingEmail}
-                      className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2"
-                    >
-                      {sendingEmail ? <FaSpinner className="animate-spin" /> : <FaEnvelope />}
-                      Send Setup Email
-                    </button>
-                    <button
-                      onClick={() => handleGenerateResetLink(selectedApp)}
-                      disabled={generatingLink}
-                      className="flex-1 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 flex items-center justify-center gap-2"
-                    >
-                      {generatingLink ? <FaSpinner className="animate-spin" /> : <FaKey />}
-                      Generate Reset Link
-                    </button>
-                  </>
+                  <button
+                    onClick={() => handleSendSetupEmail(selectedApp)}
+                    disabled={sendingEmail}
+                    className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center gap-2"
+                  >
+                    {sendingEmail ? <FaSpinner className="animate-spin" /> : <FaEnvelope />}
+                    Resend Setup Email
+                  </button>
                 )}
                 
                 <a
@@ -465,13 +519,13 @@ Feza Programming Club Team
               {selectedApp.status === 'approved' && (
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-700">
-                    <strong>How to complete registration:</strong>
+                    <strong>What happened automatically:</strong>
                   </p>
                   <ol className="text-sm text-blue-600 mt-2 list-decimal list-inside space-y-1">
-                    <li>Click "Send Setup Email" to send password setup link</li>
-                    <li>Or click "Generate Reset Link" to copy link manually</li>
-                    <li>Student clicks link to set password</li>
-                    <li>Student can then login to the platform</li>
+                    <li>Auth account created in Supabase (auth.users)</li>
+                    <li>Profile added to the members table</li>
+                    <li>Password setup email sent to the student</li>
+                    <li>Student clicks the link → sets their password → can login</li>
                   </ol>
                 </div>
               )}

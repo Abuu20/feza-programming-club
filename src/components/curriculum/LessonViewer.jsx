@@ -111,6 +111,10 @@ const LessonViewer = ({
     }
   };
 
+  // Attachment titles are raw filenames saved during upload (e.g.
+  // "lessonId-timestamp-random.png"). We never want to show those to
+  // students — only show a caption when the admin has written a real
+  // human-readable description for the file.
   const renderAttachment = (attachment) => {
     if (!attachment || !attachment.url) return null;
     
@@ -122,7 +126,7 @@ const LessonViewer = ({
           <div className="relative group">
             <img 
               src={attachment.url} 
-              alt={attachment.title || 'Learning image'} 
+              alt="Learning material"
               className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition"
               onClick={() => setSelectedImage(attachment.url)}
               loading="lazy"
@@ -135,17 +139,9 @@ const LessonViewer = ({
               🔍
             </button>
           </div>
-          {(attachment.title || attachment.description) && (
+          {attachment.description && (
             <div className="p-3 bg-gray-50 text-sm border-t">
-              {attachment.title && (
-                <div className="font-semibold text-gray-800 flex items-center gap-2 mb-1">
-                  {getFileIcon(fileType)}
-                  {attachment.title}
-                </div>
-              )}
-              {attachment.description && (
-                <p className="text-gray-600 mt-1">{attachment.description}</p>
-              )}
+              <p className="text-gray-600">{attachment.description}</p>
             </div>
           )}
         </div>
@@ -162,9 +158,8 @@ const LessonViewer = ({
                 <div>
                   <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
                     {getFileIcon(fileType)}
-                    {attachment.title || 'PDF Learning Material'}
+                    {attachment.description || 'Learning Material'}
                   </h4>
-                  {attachment.description && <p className="text-sm text-gray-600 mt-1">{attachment.description}</p>}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -209,9 +204,17 @@ const LessonViewer = ({
     );
   };
 
-  // ImageLightbox intentionally moved to top-level (below this component)
-  // to avoid it being redefined as a new component type on every render,
-  // which would cause unnecessary unmount/remount.
+  const ImageLightbox = () => {
+    if (!selectedImage) return null;
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}>
+        <div className="relative max-w-5xl max-h-screen">
+          <img src={selectedImage} alt="Full size view" className="max-w-full max-h-screen object-contain rounded-lg" />
+          <button onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition">✕</button>
+        </div>
+      </div>
+    );
+  };
 
   const learningMaterials = attachments?.filter(att => !att.is_motivational) || [];
   const codeExamples = lesson?.code_examples || [];
@@ -224,7 +227,7 @@ const LessonViewer = ({
 
   return (
     <>
-      <ImageLightbox image={selectedImage} onClose={() => setSelectedImage(null)} />
+      <ImageLightbox />
       
       {/* Input Dialog */}
       {showInputDialog && (
@@ -493,33 +496,6 @@ const LessonViewer = ({
         </div>
       </div>
     </>
-  );
-};
-
-// Defined outside LessonViewer so React sees it as a stable component
-// reference — if it were defined inside the component body it would be
-// treated as a brand-new component type on every render and remounted.
-const ImageLightbox = ({ image, onClose }) => {
-  if (!image) return null;
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div className="relative max-w-5xl max-h-screen">
-        <img
-          src={image}
-          alt="Full size view"
-          className="max-w-full max-h-screen object-contain rounded-lg"
-        />
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
   );
 };
 

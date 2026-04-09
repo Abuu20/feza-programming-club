@@ -1,5 +1,5 @@
 // src/pages/CurriculumPage.jsx
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
 import Loader from '../components/common/Loader';
@@ -7,8 +7,9 @@ import { achievementsService } from '../services/achievements';
 import toast from 'react-hot-toast';
 import { FaCheck, FaClock, FaProjectDiagram, FaImage, FaCode, FaGraduationCap, FaChevronRight, FaLock, FaHeart, FaSpinner } from 'react-icons/fa';
 
-// Lazy load the heavy component
-const LessonViewer = lazy(() => import('../components/curriculum/LessonViewer'));
+// Direct import — lazy() + Suspense causes the component to remount on
+// tab-switch, resetting all internal state (code editor, output, etc.)
+import LessonViewer from '../components/curriculum/LessonViewer';
 
 const CurriculumPage = () => {
   const { user } = useAuth();
@@ -291,29 +292,20 @@ const CurriculumPage = () => {
 
     if (selectedLessonData) {
       return (
-        <Suspense fallback={
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="text-center">
-              <FaSpinner className="animate-spin text-5xl text-primary-600 mx-auto mb-4" />
-              <p className="text-gray-500">Loading lesson viewer...</p>
-            </div>
-          </div>
-        }>
-          <LessonViewer
-            lesson={selectedLessonData.lesson}
-            module={selectedModule}
-            attachments={selectedLessonData.attachments}
-            miniProject={selectedLessonData.miniProject}
-            isCompleted={progress[selectedLesson.id] === 'completed'}
-            onComplete={() => updateProgress(selectedLesson.id, 'completed')}
-            onBack={() => {
-              setSelectedLesson(null);
-              setSelectedModule(null);
-              setSelectedLessonData(null);
-            }}
-            user={user}
-          />
-        </Suspense>
+        <LessonViewer
+          lesson={selectedLessonData.lesson}
+          module={selectedModule}
+          attachments={selectedLessonData.attachments}
+          miniProject={selectedLessonData.miniProject}
+          isCompleted={progress[selectedLesson.id] === 'completed'}
+          onComplete={() => updateProgress(selectedLesson.id, 'completed')}
+          onBack={() => {
+            setSelectedLesson(null);
+            setSelectedModule(null);
+            setSelectedLessonData(null);
+          }}
+          user={user}
+        />
       );
     }
   }

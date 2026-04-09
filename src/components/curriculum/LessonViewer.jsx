@@ -209,17 +209,9 @@ const LessonViewer = ({
     );
   };
 
-  const ImageLightbox = () => {
-    if (!selectedImage) return null;
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}>
-        <div className="relative max-w-5xl max-h-screen">
-          <img src={selectedImage} alt="Full size view" className="max-w-full max-h-screen object-contain rounded-lg" />
-          <button onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition">✕</button>
-        </div>
-      </div>
-    );
-  };
+  // ImageLightbox intentionally moved to top-level (below this component)
+  // to avoid it being redefined as a new component type on every render,
+  // which would cause unnecessary unmount/remount.
 
   const learningMaterials = attachments?.filter(att => !att.is_motivational) || [];
   const codeExamples = lesson?.code_examples || [];
@@ -232,7 +224,7 @@ const LessonViewer = ({
 
   return (
     <>
-      <ImageLightbox />
+      <ImageLightbox image={selectedImage} onClose={() => setSelectedImage(null)} />
       
       {/* Input Dialog */}
       {showInputDialog && (
@@ -501,6 +493,33 @@ const LessonViewer = ({
         </div>
       </div>
     </>
+  );
+};
+
+// Defined outside LessonViewer so React sees it as a stable component
+// reference — if it were defined inside the component body it would be
+// treated as a brand-new component type on every render and remounted.
+const ImageLightbox = ({ image, onClose }) => {
+  if (!image) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="relative max-w-5xl max-h-screen">
+        <img
+          src={image}
+          alt="Full size view"
+          className="max-w-full max-h-screen object-contain rounded-lg"
+        />
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
   );
 };
 

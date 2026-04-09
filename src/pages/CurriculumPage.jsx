@@ -1,5 +1,5 @@
 // src/pages/CurriculumPage.jsx
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
 import Loader from '../components/common/Loader';
@@ -24,12 +24,19 @@ const CurriculumPage = () => {
   const [expandedModules, setExpandedModules] = useState({});
   const [isLoadingLesson, setIsLoadingLesson] = useState(false);
 
-  // Fetch modules and basic info first
+  // Track whether curriculum data has already been fetched so tab
+  // switches (which create a new `user` object reference via auth token
+  // refresh) don't re-trigger the heavy fetch and wipe selectedLesson.
+  const curriculumFetchedRef = useRef(false);
+
+  // ── Effect 1: fetch modules + lessons + attachments ONCE ────────────
   useEffect(() => {
+    if (curriculumFetchedRef.current) return; // already loaded
+    curriculumFetchedRef.current = true;
+
     const fetchModules = async () => {
       setLoading(true);
       try {
-        // Fetch published modules
         const { data: modulesData, error: modulesError } = await supabase
           .from('curriculum_modules')
           .select('*')
@@ -40,7 +47,6 @@ const CurriculumPage = () => {
         setModules(modulesData || []);
 
         if (modulesData && modulesData.length > 0) {
-          // Fetch lessons for all modules
           const moduleIds = modulesData.map(m => m.id);
           const { data: lessonsData, error: lessonsError } = await supabase
             .from('curriculum')
@@ -58,7 +64,6 @@ const CurriculumPage = () => {
             setLessons(lessonsMap);
           }
 
-          // Fetch only attachment counts (not full data)
           const lessonIds = lessonsData?.map(l => l.id) || [];
           if (lessonIds.length > 0) {
             const { data: attachmentsData } = await supabase
@@ -75,7 +80,6 @@ const CurriculumPage = () => {
               setAttachments(attachmentsMap);
             }
 
-            // Fetch mini projects info
             const { data: projectsData } = await supabase
               .from('mini_projects')
               .select('lesson_id, id, title')
@@ -90,22 +94,6 @@ const CurriculumPage = () => {
             }
           }
         }
-
-        // Fetch user progress
-        if (user) {
-          const { data: progressData } = await supabase
-            .from('user_curriculum_progress')
-            .select('curriculum_id, status')
-            .eq('user_id', user.id);
-
-          if (progressData) {
-            const progressMap = {};
-            progressData.forEach(p => {
-              progressMap[p.curriculum_id] = p.status;
-            });
-            setProgress(progressMap);
-          }
-        }
       } catch (error) {
         console.error('Error fetching curriculum:', error);
         toast.error('Failed to load curriculum');
@@ -115,15 +103,37 @@ const CurriculumPage = () => {
     };
 
     fetchModules();
-  }, [user]);
+  }, []); // ← no dependency on `user` — curriculum data never changes per session
+
+  // ── Effect 2: fetch user progress separately, keyed only on user ID ─
+  // Using user?.id (a primitive) means a new `user` object reference from
+  // a token refresh will NOT re-run this effect unless the actual ID changes.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchProgress = async () => {
+      const { data: progressData } = await supabase
+        .from('user_curriculum_progress')
+        .select('curriculum_id, status')
+        .eq('user_id', user.id);
+
+      if (progressData) {
+        const progressMap = {};
+        progressData.forEach(p => {
+          progressMap[p.curriculum_id] = p.status;
+        });
+        setProgress(progressMap);
+      }
+    };
+
+    fetchProgress();
+  }, [user?.id]); // ← only re-runs if the actual user ID changes (login/logout)
 
   const loadFullLesson = async (lessonId) => {
     setIsLoadingLesson(true);
     try {
-      // Show immediate feedback
       toast.loading('Loading lesson content...', { id: 'loading-lesson' });
-      
-      // Fetch full lesson details
+
       const { data: lessonData, error: lessonError } = await supabase
         .from('curriculum')
         .select('*')
@@ -132,14 +142,12 @@ const CurriculumPage = () => {
 
       if (lessonError) throw lessonError;
 
-      // Fetch attachments for this lesson
       const { data: attachmentsData } = await supabase
         .from('lesson_attachments')
         .select('*')
         .eq('lesson_id', lessonId)
         .order('display_order', { ascending: true });
 
-      // Fetch mini project for this lesson
       const { data: projectData } = await supabase
         .from('mini_projects')
         .select('*')
@@ -148,7 +156,7 @@ const CurriculumPage = () => {
 
       toast.dismiss('loading-lesson');
       toast.success('Lesson ready!');
-      
+
       return {
         lesson: lessonData,
         attachments: attachmentsData || [],
@@ -181,7 +189,6 @@ const CurriculumPage = () => {
 
     if (!error) {
       setProgress(prev => ({ ...prev, [lessonId]: status }));
-      
       if (status === 'completed') {
         toast.success('🎉 Lesson completed! Great job!');
       }
@@ -193,8 +200,7 @@ const CurriculumPage = () => {
   const handleLessonClick = async (module, lessonSummary) => {
     const moduleLessons = lessons[module.id] || [];
     const lessonIndex = moduleLessons.findIndex(l => l.id === lessonSummary.id);
-    
-    // Check if previous lesson is completed
+
     if (lessonIndex > 0) {
       const prevLesson = moduleLessons[lessonIndex - 1];
       if (progress[prevLesson.id] !== 'completed') {
@@ -202,23 +208,19 @@ const CurriculumPage = () => {
         return;
       }
     }
-    
-    // Immediately show the lesson viewer with loading state
+
     setSelectedModule(module);
     setSelectedLesson(lessonSummary);
-    setSelectedLessonData(null); // Clear any old data
-    
-    // Load full content in background
+    setSelectedLessonData(null);
+
     const fullLesson = await loadFullLesson(lessonSummary.id);
     if (fullLesson) {
       setSelectedLessonData(fullLesson);
     } else {
-      // If loading failed, go back
       setSelectedLesson(null);
       setSelectedModule(null);
     }
-    
-    // Update progress to started
+
     if (!progress[lessonSummary.id]) {
       await updateProgress(lessonSummary.id, 'started');
     }
@@ -264,9 +266,8 @@ const CurriculumPage = () => {
     );
   }
 
-  // Lesson Viewer Mode - Show immediately with loading state if data not ready
+  // Lesson Viewer Mode
   if (selectedLesson && selectedModule) {
-    // If data is still loading, show a nice loading screen
     if (!selectedLessonData && isLoadingLesson) {
       return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -274,7 +275,7 @@ const CurriculumPage = () => {
             <FaSpinner className="animate-spin text-5xl text-primary-600 mx-auto mb-4" />
             <h2 className="text-2xl font-semibold text-gray-700 mb-2">Loading Lesson</h2>
             <p className="text-gray-500">Preparing {selectedLesson.title}...</p>
-            <button 
+            <button
               onClick={() => {
                 setSelectedLesson(null);
                 setSelectedModule(null);
@@ -288,7 +289,6 @@ const CurriculumPage = () => {
       );
     }
 
-    // If data is loaded, show the lesson
     if (selectedLessonData) {
       return (
         <Suspense fallback={
@@ -340,10 +340,10 @@ const CurriculumPage = () => {
           const moduleLessons = lessons[module.id] || [];
           const completedInModule = moduleLessons.filter(l => progress[l.id] === 'completed').length;
           const progressPercent = moduleLessons.length > 0 ? (completedInModule / moduleLessons.length) * 100 : 0;
-          
+
           return (
             <div key={module.id} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-              <div 
+              <div
                 className="p-5 cursor-pointer hover:bg-gray-50 transition"
                 onClick={() => toggleModule(module.id)}
                 style={{ borderLeft: `6px solid ${module.color || '#4F46E5'}` }}
@@ -364,7 +364,7 @@ const CurriculumPage = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-green-500 h-2 rounded-full transition-all"
                         style={{ width: `${progressPercent}%` }}
                       />
@@ -384,7 +384,7 @@ const CurriculumPage = () => {
                     const hasProject = !!miniProjects[lesson.id];
                     const hasImages = attachments[lesson.id]?.length > 0;
                     const hasMotivational = attachments[lesson.id]?.some(att => att.is_motivational) || false;
-                    
+
                     return (
                       <button
                         key={lesson.id}
@@ -395,12 +395,12 @@ const CurriculumPage = () => {
                       >
                         <div className="flex items-center gap-4 flex-1">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0
-                            ${status === 'completed' ? 'bg-green-500 text-white' : 
-                              status === 'in-progress' ? 'bg-yellow-500 text-white' : 
+                            ${status === 'completed' ? 'bg-green-500 text-white' :
+                              status === 'in-progress' ? 'bg-yellow-500 text-white' :
                               'bg-gray-200 text-gray-600'}`}>
                             {status === 'completed' ? '✓' : lessonIdx + 1}
                           </div>
-                          
+
                           <div className="flex-1">
                             <div className="font-medium flex items-center gap-2 flex-wrap">
                               {lesson.title}
@@ -429,7 +429,7 @@ const CurriculumPage = () => {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="text-gray-400">
                           {status === 'completed' ? (
                             <FaCheck className="text-green-500" />

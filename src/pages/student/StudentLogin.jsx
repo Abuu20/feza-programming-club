@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
-import { FaEnvelope, FaLock, FaSignInAlt, FaUserPlus, FaCode } from 'react-icons/fa';
+import { FaEnvelope, FaLock, FaCode } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 const StudentLogin = () => {
@@ -13,21 +13,29 @@ const StudentLogin = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      // Check registration request status BEFORE logging in
+      const { data: request } = await supabase
+        .from('registration_requests')
+        .select('status')
+        .eq('email', email)
+        .maybeSingle();
 
-      if (error) throw error;
-
-      // Check if this is the default password
-      if (password === 'TempPass123!') {
-        toast.info('Please change your default password for security');
-        navigate('/force-password-change');
+      if (request && request.status === 'pending') {
+        toast.error('Your account is pending admin approval. Please wait.');
+        setLoading(false);
         return;
       }
+
+      if (request && request.status === 'rejected') {
+        toast.error('Your registration request was not approved. Contact the club admin.');
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
 
       toast.success('Login successful!');
       navigate('/student/dashboard');
@@ -48,7 +56,7 @@ const StudentLogin = () => {
           <h2 className="text-2xl font-bold text-gray-800">Student Login</h2>
           <p className="text-gray-600 mt-2">Access your coding challenges and track your progress</p>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
@@ -56,45 +64,23 @@ const StudentLogin = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaEnvelope className="h-5 w-5 text-gray-400" />
               </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="input-field pl-10"
-                placeholder="your@email.com"
-              />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                required className="input-field pl-10" placeholder="your@email.com" />
             </div>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaLock className="h-5 w-5 text-gray-400" />
               </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="input-field pl-10"
-                placeholder="••••••••"
-              />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                required className="input-field pl-10" placeholder="••••••••" />
             </div>
           </div>
 
-          <div className="flex items-center justify-end">
-            <Link to="/student/forgot-password" className="text-sm text-primary-600 hover:text-primary-500">
-              Forgot password?
-            </Link>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full btn-primary py-3"
-          >
+          <button type="submit" disabled={loading} className="w-full btn-primary py-3">
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
 

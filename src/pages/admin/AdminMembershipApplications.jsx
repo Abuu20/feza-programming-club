@@ -132,51 +132,27 @@ Feza Programming Club Team
       return;
     }
 
-    // Approval — call the Edge Function which creates auth.users + members + sends reset email
+    // Approval — the auth account was already created when the student submitted
+    // the registration form. Just mark the request as approved so they can log in.
     if (status === 'approved') {
-      setSendingEmail(true);
       try {
-        const app = selectedApp;
-        const { data: { session } } = await supabase.auth.getSession();
+        const { error } = await supabase
+          .from('registration_requests')
+          .update({
+            status: 'approved',
+            admin_notes: adminNotes || null,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', id);
 
-        const response = await fetch(
-          `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/approve-member`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token}`,
-              'apikey': process.env.REACT_APP_SUPABASE_ANON_KEY,
-            },
-            body: JSON.stringify({
-              application_id: app.id,
-              full_name: app.full_name,
-              email: app.email,
-              school: app.school || '',
-              grade: app.grade || '',
-              phone: app.phone || '',
-              admin_notes: adminNotes || '',
-            }),
-          }
-        );
-
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Approval failed');
-
-        if (result.email_sent) {
-          toast.success(`✅ ${app.full_name} approved! Account created and password setup email sent.`);
-        } else {
-          toast.success(`✅ ${app.full_name} approved! Account created. Send them the setup link manually.`);
-        }
-
+        if (error) throw error;
+        toast.success(`✅ ${selectedApp.full_name} approved! They can now log in.`);
         fetchApplications();
         setSelectedApp(null);
         setAdminNotes('');
       } catch (error) {
-        toast.error(error.message || 'Failed to approve application');
+        toast.error(error.message || 'Failed to approve');
         console.error('Approve error:', error);
-      } finally {
-        setSendingEmail(false);
       }
     }
   };

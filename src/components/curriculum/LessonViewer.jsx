@@ -1,6 +1,6 @@
 // src/components/curriculum/LessonViewer.jsx
 import React, { useState } from 'react';
-import { FaCheck, FaClock, FaProjectDiagram, FaImage, FaCode, FaLightbulb, FaGraduationCap, FaDownload, FaFilePdf, FaFileImage, FaFileAlt, FaHeart, FaStar, FaRegSmile, FaSpinner, FaKeyboard, FaChevronDown, FaChevronUp, FaInfoCircle } from 'react-icons/fa';
+import { FaCheck, FaClock, FaProjectDiagram, FaImage, FaCode, FaLightbulb, FaGraduationCap, FaDownload, FaFilePdf, FaFileImage, FaFileAlt, FaHeart, FaStar, FaRegSmile, FaSpinner, FaKeyboard, FaChevronDown, FaChevronUp, FaInfoCircle, FaVideo } from 'react-icons/fa';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { usePythonRunner } from '../../hooks/usePythonRunner';
@@ -660,8 +660,5 @@ const LessonViewer = ({
     </>
   );
 };
-
-// Add missing FaVideo import
-import { FaVideo } from 'react-icons/fa';
 
 export default LessonViewer;

@@ -1,6 +1,6 @@
 // src/components/curriculum/LessonViewer.jsx
 import React, { useState } from 'react';
-import { FaCheck, FaClock, FaProjectDiagram, FaImage, FaCode, FaLightbulb, FaGraduationCap, FaDownload, FaFilePdf, FaFileImage, FaFileAlt, FaHeart, FaStar, FaRegSmile, FaSpinner, FaKeyboard } from 'react-icons/fa';
+import { FaCheck, FaClock, FaProjectDiagram, FaImage, FaCode, FaLightbulb, FaGraduationCap, FaDownload, FaFilePdf, FaFileImage, FaFileAlt, FaHeart, FaStar, FaRegSmile, FaSpinner, FaKeyboard, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { usePythonRunner } from '../../hooks/usePythonRunner';
@@ -9,27 +9,43 @@ const LessonViewer = ({
   lesson, 
   module, 
   attachments = [], 
-  miniProject = null, 
+  miniProjects = [], 
   isCompleted = false, 
   onComplete, 
   onBack 
 }) => {
-  const [userCode, setUserCode] = useState(miniProject?.starter_code || '# Write your code here\n\n');
-  const [codeOutput, setCodeOutput] = useState('');
-  const [showSolution, setShowSolution] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState({});
+  const [userCodes, setUserCodes] = useState({});
+  const [codeOutputs, setCodeOutputs] = useState({});
+  const [showSolutions, setShowSolutions] = useState({});
   const [selectedImage, setSelectedImage] = useState(null);
-  const [inputValues, setInputValues] = useState([]);
+  const [inputValues, setInputValues] = useState({});
   const [showInputDialog, setShowInputDialog] = useState(false);
   const [pendingCode, setPendingCode] = useState(null);
+  const [pendingProjectId, setPendingProjectId] = useState(null);
   
   const { runPython, isLoading: isRunning } = usePythonRunner();
 
-  // Helper function to safely get array values (handles both array and string formats)
+  // Initialize user code for each project
+  React.useEffect(() => {
+    const initialCodes = {};
+    const initialOutputs = {};
+    const initialSolutions = {};
+    miniProjects.forEach(project => {
+      initialCodes[project.id] = project.starter_code || '# Write your code here\n\n';
+      initialOutputs[project.id] = '';
+      initialSolutions[project.id] = false;
+    });
+    setUserCodes(initialCodes);
+    setCodeOutputs(initialOutputs);
+    setShowSolutions(initialSolutions);
+  }, [miniProjects]);
+
+  // Helper function to safely get array values
   const getArrayFromField = (field) => {
     if (!field) return [];
     if (Array.isArray(field)) return field;
     if (typeof field === 'string') {
-      // Check if it's a JSON string representation of an array
       if (field.startsWith('[') && field.endsWith(']')) {
         try {
           const parsed = JSON.parse(field);
@@ -38,58 +54,59 @@ const LessonViewer = ({
           return field.split('\n').filter(line => line.trim());
         }
       }
-      // Treat as newline-separated string
       return field.split('\n').filter(line => line.trim());
     }
     return [];
   };
 
-  // Helper function to safely get string field
-  const getStringFromField = (field) => {
-    if (!field) return '';
-    if (typeof field === 'string') return field;
-    if (Array.isArray(field)) return field.join('\n');
-    return String(field);
-  };
-
-  const runCode = async () => {
-    if (!userCode.trim()) {
-      setCodeOutput('⚠️ Please write some code first!');
+  const runCode = async (projectId, code) => {
+    if (!code.trim()) {
+      setCodeOutputs(prev => ({ ...prev, [projectId]: '⚠️ Please write some code first!' }));
       return;
     }
 
-    // Check if code has input() calls
-    const hasInput = userCode.includes('input(');
+    const hasInput = code.includes('input(');
     
     if (hasInput) {
-      setPendingCode(userCode);
+      setPendingCode(code);
+      setPendingProjectId(projectId);
       setShowInputDialog(true);
     } else {
-      setCodeOutput('🔄 Running code...');
-      const result = await runPython(userCode, []);
+      setCodeOutputs(prev => ({ ...prev, [projectId]: '🔄 Running code...' }));
+      const result = await runPython(code, []);
       
       if (result.error) {
-        setCodeOutput(`❌ Error:\n${result.error}`);
+        setCodeOutputs(prev => ({ ...prev, [projectId]: `❌ Error:\n${result.error}` }));
       } else {
-        setCodeOutput(`✅ Output:\n${result.output || 'No output'}`);
+        setCodeOutputs(prev => ({ ...prev, [projectId]: `✅ Output:\n${result.output || 'No output'}` }));
       }
     }
   };
 
   const handleRunWithInputs = async () => {
     setShowInputDialog(false);
-    setCodeOutput('🔄 Running code with provided inputs...');
+    const inputVals = inputValues[pendingProjectId] || [];
     
-    const result = await runPython(pendingCode, inputValues);
+    setCodeOutputs(prev => ({ ...prev, [pendingProjectId]: '🔄 Running code with provided inputs...' }));
+    
+    const result = await runPython(pendingCode, inputVals);
     
     if (result.error) {
-      setCodeOutput(`❌ Error:\n${result.error}`);
+      setCodeOutputs(prev => ({ ...prev, [pendingProjectId]: `❌ Error:\n${result.error}` }));
     } else {
-      setCodeOutput(`✅ Output:\n${result.output || 'No output'}`);
+      setCodeOutputs(prev => ({ ...prev, [pendingProjectId]: `✅ Output:\n${result.output || 'No output'}` }));
     }
     
-    setInputValues([]);
+    setInputValues(prev => ({ ...prev, [pendingProjectId]: [] }));
     setPendingCode(null);
+    setPendingProjectId(null);
+  };
+
+  const toggleProject = (projectId) => {
+    setExpandedProjects(prev => ({
+      ...prev,
+      [projectId]: !prev[projectId]
+    }));
   };
 
   const getFileType = (url) => {
@@ -111,10 +128,6 @@ const LessonViewer = ({
     }
   };
 
-  // Attachment titles are raw filenames saved during upload (e.g.
-  // "lessonId-timestamp-random.png"). We never want to show those to
-  // students — only show a caption when the admin has written a real
-  // human-readable description for the file.
   const renderAttachment = (attachment) => {
     if (!attachment || !attachment.url) return null;
     
@@ -219,7 +232,6 @@ const LessonViewer = ({
   const learningMaterials = attachments?.filter(att => !att.is_motivational) || [];
   const codeExamples = lesson?.code_examples || [];
   
-  // Get array values for text fields
   const learningOutcomes = getArrayFromField(lesson?.learning_outcomes);
   const keyTakeaways = getArrayFromField(lesson?.key_takeaways);
   const commonMistakes = getArrayFromField(lesson?.common_mistakes);
@@ -246,8 +258,8 @@ const LessonViewer = ({
                   rows="3"
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                   placeholder="Example:&#10;10&#10;Hello World&#10;42"
-                  value={inputValues.join('\n')}
-                  onChange={(e) => setInputValues(e.target.value.split('\n').filter(v => v.trim()))}
+                  value={(inputValues[pendingProjectId] || []).join('\n')}
+                  onChange={(e) => setInputValues(prev => ({ ...prev, [pendingProjectId]: e.target.value.split('\n').filter(v => v.trim()) }))}
                 />
                 <p className="text-xs text-gray-500">Each line will be used as an input in order</p>
               </div>
@@ -256,8 +268,9 @@ const LessonViewer = ({
                 <button
                   onClick={() => {
                     setShowInputDialog(false);
-                    setInputValues([]);
+                    setInputValues(prev => ({ ...prev, [pendingProjectId]: [] }));
                     setPendingCode(null);
+                    setPendingProjectId(null);
                   }}
                   className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
                 >
@@ -295,7 +308,11 @@ const LessonViewer = ({
             <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
               <span className="flex items-center gap-1"><FaClock /> {lesson?.estimated_time || 10} minutes</span>
               <span className="capitalize">📊 {lesson?.difficulty || 'Beginner'}</span>
-              {miniProject && <span className="flex items-center gap-1 text-green-600"><FaProjectDiagram /> Includes Mini-Project</span>}
+              {miniProjects.length > 0 && (
+                <span className="flex items-center gap-1 text-green-600">
+                  <FaProjectDiagram /> {miniProjects.length} Mini-Project{miniProjects.length > 1 ? 's' : ''}
+                </span>
+              )}
               {learningMaterials.length > 0 && <span className="flex items-center gap-1 text-purple-600"><FaImage /> {learningMaterials.length} learning materials</span>}
             </div>
             <p className="text-gray-700 text-lg">{lesson?.description}</p>
@@ -304,13 +321,9 @@ const LessonViewer = ({
           {/* Prerequisites */}
           {prerequisites.length > 0 && (
             <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg mb-6">
-              <h3 className="font-semibold flex items-center gap-2 mb-2">
-                📋 Prerequisites
-              </h3>
+              <h3 className="font-semibold flex items-center gap-2 mb-2">📋 Prerequisites</h3>
               <ul className="list-disc list-inside space-y-1 text-gray-700">
-                {prerequisites.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
+                {prerequisites.map((item, i) => <li key={i}>{item}</li>)}
               </ul>
             </div>
           )}
@@ -323,9 +336,7 @@ const LessonViewer = ({
                 What You'll Learn
               </h3>
               <ul className="list-disc list-inside space-y-1 text-gray-700">
-                {learningOutcomes.map((outcome, i) => (
-                  <li key={i}>{outcome}</li>
-                ))}
+                {learningOutcomes.map((outcome, i) => <li key={i}>{outcome}</li>)}
               </ul>
             </div>
           )}
@@ -372,82 +383,142 @@ const LessonViewer = ({
             </div>
           )}
 
-          {/* Mini Project */}
-          {miniProject && (
-            <div className="border-2 border-green-200 rounded-xl p-6 mb-8 bg-gradient-to-r from-green-50 to-emerald-50">
+          {/* Multiple Mini Projects */}
+          {miniProjects.length > 0 && (
+            <div className="mb-8">
               <h3 className="text-2xl font-bold flex items-center gap-2 mb-4 text-green-800">
                 <FaProjectDiagram className="text-green-600" />
-                🎯 Mini-Project: {miniProject.title}
+                Mini-Projects ({miniProjects.length})
               </h3>
+              <p className="text-gray-600 mb-4">Complete these projects to practice what you've learned!</p>
               
-              <p className="text-gray-700 mb-4 text-lg">{miniProject.description}</p>
-              
-              {miniProject.learning_goals && miniProject.learning_goals.length > 0 && (
-                <div className="bg-yellow-50 p-4 rounded-lg mb-4 border border-yellow-200">
-                  <h4 className="font-semibold flex items-center gap-2 mb-2">
-                    <FaLightbulb className="text-yellow-600" />
-                    Project Goals
-                  </h4>
-                  <ul className="list-disc list-inside text-sm space-y-1">
-                    {miniProject.learning_goals.map((goal, i) => (
-                      <li key={i} className="text-gray-700">{goal}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div className="space-y-4">
+                {miniProjects.map((project, idx) => {
+                  const isExpanded = expandedProjects[project.id] !== false; // Default expanded
+                  
+                  return (
+                    <div key={project.id} className="border-2 border-green-200 rounded-xl overflow-hidden bg-gradient-to-r from-green-50 to-emerald-50">
+                      {/* Project Header */}
+                      <button
+                        onClick={() => toggleProject(project.id)}
+                        className="w-full p-5 text-left flex justify-between items-center hover:bg-green-100 transition"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-2xl font-bold text-green-700">#{idx + 1}</span>
+                            <h4 className="text-xl font-bold text-green-800">{project.title}</h4>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              project.difficulty === 'beginner' ? 'bg-green-200 text-green-700' :
+                              project.difficulty === 'intermediate' ? 'bg-yellow-200 text-yellow-700' :
+                              'bg-red-200 text-red-700'
+                            }`}>
+                              {project.difficulty}
+                            </span>
+                            <span className="text-xs text-gray-600 flex items-center gap-1">
+                              <FaClock /> {project.estimated_time} min
+                            </span>
+                          </div>
+                          <p className="text-gray-600 mt-1">{project.description}</p>
+                        </div>
+                        {isExpanded ? <FaChevronUp className="text-green-600" /> : <FaChevronDown className="text-green-600" />}
+                      </button>
 
-              <div className="mb-4">
-                <label className="block font-semibold mb-2 text-gray-700">Your Code:</label>
-                <textarea
-                  value={userCode}
-                  onChange={(e) => setUserCode(e.target.value)}
-                  rows="12"
-                  className="w-full font-mono text-sm p-4 border rounded-lg bg-gray-900 text-gray-100 focus:ring-2 focus:ring-green-500 outline-none"
-                />
+                      {/* Project Content */}
+                      {isExpanded && (
+                        <div className="p-5 pt-0 border-t border-green-200">
+                          {/* Learning Goals */}
+                          {project.learning_goals && project.learning_goals.length > 0 && (
+                            <div className="bg-yellow-50 p-4 rounded-lg mb-4 border border-yellow-200">
+                              <h4 className="font-semibold flex items-center gap-2 mb-2">
+                                <FaLightbulb className="text-yellow-600" />
+                                Project Goals
+                              </h4>
+                              <ul className="list-disc list-inside text-sm space-y-1">
+                                {project.learning_goals.map((goal, i) => (
+                                  <li key={i} className="text-gray-700">{goal}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Code Editor */}
+                          <div className="mb-4">
+                            <label className="block font-semibold mb-2 text-gray-700">Your Code:</label>
+                            <textarea
+                              value={userCodes[project.id] || ''}
+                              onChange={(e) => setUserCodes(prev => ({ ...prev, [project.id]: e.target.value }))}
+                              rows="10"
+                              className="w-full font-mono text-sm p-4 border rounded-lg bg-gray-900 text-gray-100 focus:ring-2 focus:ring-green-500 outline-none"
+                            />
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap gap-3 mb-4">
+                            <button 
+                              onClick={() => runCode(project.id, userCodes[project.id])} 
+                              disabled={isRunning}
+                              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {isRunning ? <><FaSpinner className="animate-spin" /> Running...</> : '▶ Run Code'}
+                            </button>
+                            {project.solution_code && (
+                              <button 
+                                onClick={() => setShowSolutions(prev => ({ ...prev, [project.id]: !prev[project.id] }))} 
+                                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                              >
+                                {showSolutions[project.id] ? 'Hide Solution' : '💡 View Solution'}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Output */}
+                          {codeOutputs[project.id] && (
+                            <div className="bg-gray-900 rounded-lg p-4 mb-4">
+                              <div className="text-gray-400 text-xs mb-1">Output:</div>
+                              <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">{codeOutputs[project.id]}</pre>
+                            </div>
+                          )}
+
+                          {/* Solution */}
+                          {showSolutions[project.id] && project.solution_code && (
+                            <div className="mt-4">
+                              <h4 className="font-semibold mb-2 text-gray-700">Solution:</h4>
+                              <SyntaxHighlighter language="python" style={tomorrow}>
+                                {project.solution_code}
+                              </SyntaxHighlighter>
+                            </div>
+                          )}
+
+                          {/* Expected Output */}
+                          {project.expected_output && (
+                            <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
+                              <h4 className="font-semibold mb-2 text-blue-800">Expected Output:</h4>
+                              <pre className="text-sm font-mono bg-blue-100 p-2 rounded text-blue-900">
+                                {project.expected_output}
+                              </pre>
+                            </div>
+                          )}
+
+                          {/* Hints */}
+                          {project.hints && project.hints.length > 0 && (
+                            <div className="bg-yellow-50 p-4 rounded-lg mt-4 border border-yellow-200">
+                              <h4 className="font-semibold mb-2 text-yellow-800 flex items-center gap-2">
+                                <FaLightbulb className="text-yellow-600" />
+                                Hints
+                              </h4>
+                              <ul className="list-disc list-inside text-sm space-y-1">
+                                {project.hints.map((hint, i) => (
+                                  <li key={i} className="text-gray-700">{hint}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-
-              <div className="flex flex-wrap gap-3 mb-4">
-                <button 
-                  onClick={runCode} 
-                  disabled={isRunning}
-                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isRunning ? <><FaSpinner className="animate-spin" /> Running...</> : '▶ Run Code'}
-                </button>
-                {miniProject.solution_code && (
-                  <button 
-                    onClick={() => setShowSolution(!showSolution)} 
-                    className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    {showSolution ? 'Hide Solution' : '💡 View Solution'}
-                  </button>
-                )}
-              </div>
-
-              {codeOutput && (
-                <div className="bg-gray-900 rounded-lg p-4 mb-4">
-                  <div className="text-gray-400 text-xs mb-1">Output:</div>
-                  <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">{codeOutput}</pre>
-                </div>
-              )}
-
-              {showSolution && miniProject.solution_code && (
-                <div className="mt-4">
-                  <h4 className="font-semibold mb-2 text-gray-700">Solution:</h4>
-                  <SyntaxHighlighter language="python" style={tomorrow}>
-                    {miniProject.solution_code}
-                  </SyntaxHighlighter>
-                </div>
-              )}
-
-              {miniProject.expected_output && (
-                <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
-                  <h4 className="font-semibold mb-2 text-blue-800">Expected Output:</h4>
-                  <pre className="text-sm font-mono bg-blue-100 p-2 rounded text-blue-900">
-                    {miniProject.expected_output}
-                  </pre>
-                </div>
-              )}
             </div>
           )}
 
@@ -459,9 +530,7 @@ const LessonViewer = ({
                 Key Takeaways
               </h3>
               <ul className="list-disc list-inside space-y-1 text-gray-700">
-                {keyTakeaways.map((takeaway, i) => (
-                  <li key={i}>{takeaway}</li>
-                ))}
+                {keyTakeaways.map((takeaway, i) => <li key={i}>{takeaway}</li>)}
               </ul>
             </div>
           )}
@@ -469,13 +538,9 @@ const LessonViewer = ({
           {/* Common Mistakes */}
           {commonMistakes.length > 0 && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-6">
-              <h3 className="font-semibold flex items-center gap-2 mb-2">
-                ⚠️ Common Mistakes to Avoid
-              </h3>
+              <h3 className="font-semibold flex items-center gap-2 mb-2">⚠️ Common Mistakes to Avoid</h3>
               <ul className="list-disc list-inside space-y-1 text-gray-700">
-                {commonMistakes.map((mistake, i) => (
-                  <li key={i}>{mistake}</li>
-                ))}
+                {commonMistakes.map((mistake, i) => <li key={i}>{mistake}</li>)}
               </ul>
             </div>
           )}

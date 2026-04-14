@@ -1,219 +1,324 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// ─────────────────────────────────────────────────────────────
+// BEFORE USING THIS FILE, run in your project terminal:
+//   npm install @xterm/xterm @xterm/addon-fit
+// ─────────────────────────────────────────────────────────────
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
-import { 
-  FaPlay, 
-  FaSave, 
-  FaCopy, 
-  FaDownload, 
-  FaUpload,
-  FaTerminal,
-  FaCog,
-  FaCode,
-  FaFile,
-  FaPlus,
-  FaTrash,
-  FaExpand,
-  FaCompress,
-  FaMoon,
-  FaSun,
-  FaExclamationTriangle,
-  FaWifi,
-  FaRocket,
-  FaServer,
-  FaClock
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
+import {
+  FaPlay, FaSave, FaCopy, FaDownload, FaUpload,
+  FaTerminal, FaCog, FaCode, FaFile, FaPlus, FaTrash,
+  FaExpand, FaCompress, FaMoon, FaSun,
+  FaExclamationTriangle, FaWifi, FaRocket, FaServer, FaStop,
 } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
 import { codesService } from '../../services/codes';
 import toast from 'react-hot-toast';
 
+// ─────────────────────────────────────────────────────────────
+// XtermTerminal component
+// ─────────────────────────────────────────────────────────────
+const XtermTerminal = ({ terminalRef, onReady }) => {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: '"Fira Code", "Cascadia Code", "Courier New", monospace',
+      theme: {
+        background: '#0d1117',
+        foreground: '#e6edf3',
+        cursor: '#58a6ff',
+        selectionBackground: '#264f78',
+        black: '#0d1117',
+        red: '#ff7b72',
+        green: '#3fb950',
+        yellow: '#d29922',
+        blue: '#58a6ff',
+        magenta: '#bc8cff',
+        cyan: '#39c5cf',
+        white: '#e6edf3',
+        brightBlack: '#8b949e',
+        brightRed: '#ffa198',
+        brightGreen: '#56d364',
+        brightYellow: '#e3b341',
+        brightBlue: '#79c0ff',
+        brightMagenta: '#d2a8ff',
+        brightCyan: '#56d4dd',
+        brightWhite: '#ffffff',
+      },
+      scrollback: 2000,
+      convertEol: true,
+    });
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(containerRef.current);
+
+    // Small delay so DOM is fully laid out before fit
+    setTimeout(() => {
+      try { fitAddon.fit(); } catch (_) {}
+    }, 50);
+
+    if (terminalRef) {
+      terminalRef.current = { term, fitAddon };
+    }
+
+    if (onReady) onReady(term);
+
+    const ro = new ResizeObserver(() => {
+      try { fitAddon.fit(); } catch (_) {}
+    });
+    ro.observe(containerRef.current);
+
+    return () => {
+      ro.disconnect();
+      term.dispose();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ width: '100%', height: '100%', background: '#0d1117', padding: '4px', boxSizing: 'border-box' }}
+    />
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// Main EnhancedPythonEditor
+// ─────────────────────────────────────────────────────────────
 const EnhancedPythonEditor = () => {
   const { user } = useAuth();
-  const [code, setCode] = useState(`# Welcome to Feza Python Lab! 🐍
-# Choose your execution mode below
+
+  const defaultCode = `# Welcome to Feza Python Lab! 🐍
+# input() is fully supported — try running this!
 
 print("Hello from Python!")
-name = "Feza Student"
+name = input("What is your name? ")
 print(f"Welcome, {name}!")
 
-# Try some calculations
-for i in range(1, 6):
-    print(f"Number {i} squared is {i**2}")
+age = input("How old are you? ")
+print(f"Wow, {age} years old!")
+`;
 
-# Define a function
-def greet(person):
-    return f"Hello, {person}!"
-
-print(greet("Python Coder"))`);
-
-  const [output, setOutput] = useState('');
+  const [code, setCode] = useState(defaultCode);
   const [isRunning, setIsRunning] = useState(false);
   const [theme, setTheme] = useState('dark');
   const [fontSize, setFontSize] = useState(14);
   const [showConsole, setShowConsole] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [files, setFiles] = useState([
-    { id: 1, name: 'main.py', content: code }
-  ]);
+  const [files, setFiles] = useState([{ id: 1, name: 'main.py', content: defaultCode }]);
   const [currentFile, setCurrentFile] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [autoSave, setAutoSave] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
-  
-  // Execution mode states
-  const [executionMode, setExecutionMode] = useState('browser'); // 'browser' or 'api'
+  const [executionMode, setExecutionMode] = useState('browser');
   const [pyodide, setPyodide] = useState(null);
   const [pyodideLoading, setPyodideLoading] = useState(false);
   const [pyodideLoaded, setPyodideLoaded] = useState(false);
-  const [apiStatus, setApiStatus] = useState('checking'); // 'checking', 'online', 'offline'
+  const [apiStatus, setApiStatus] = useState('checking');
   const [executionTime, setExecutionTime] = useState(null);
-  const [memoryUsed, setMemoryUsed] = useState(null);
 
-  // Load Pyodide on mount if browser mode is selected
+  // Terminal & input refs
+  const terminalRef = useRef(null); // { term, fitAddon }
+  const inputResolverRef = useRef(null);
+  const inputBufferRef = useRef('');
+  const abortRef = useRef(false);
+
+  // ── Effects ───────────────────────────────
   useEffect(() => {
     if (executionMode === 'browser' && !pyodideLoaded && !pyodideLoading) {
       loadPyodide();
     }
-  }, [executionMode]);
+  }, [executionMode]); // eslint-disable-line
 
-  // Check API status on mount
+  useEffect(() => { checkApiStatus(); }, []);
+
   useEffect(() => {
-    checkApiStatus();
+    let id;
+    if (autoSave && user) id = setTimeout(handleSave, 3000);
+    return () => clearTimeout(id);
+  }, [code, autoSave, user]); // eslint-disable-line
+
+  // ── Terminal helpers ──────────────────────
+  const writeToTerminal = useCallback((text) => {
+    terminalRef.current?.term?.write(text);
   }, []);
 
-  // Auto-save feature
-  useEffect(() => {
-    let timeoutId;
-    if (autoSave && user) {
-      timeoutId = setTimeout(() => {
-        handleSave();
-      }, 3000);
-    }
-    return () => clearTimeout(timeoutId);
-  }, [code, autoSave, user]);
+  const clearTerminal = useCallback(() => {
+    terminalRef.current?.term?.clear();
+  }, []);
 
+  // Called once xterm is mounted and ready
+  const onTerminalReady = useCallback((term) => {
+    term.onData((data) => {
+      // Only process keypresses while waiting for input()
+      if (!inputResolverRef.current) return;
+
+      if (data === '\r' || data === '\n') {
+        const line = inputBufferRef.current;
+        inputBufferRef.current = '';
+        const resolver = inputResolverRef.current;
+        inputResolverRef.current = null;
+        term.write('\r\n');
+        resolver(line);
+      } else if (data === '\u007f' || data === '\b') {
+        // Backspace
+        if (inputBufferRef.current.length > 0) {
+          inputBufferRef.current = inputBufferRef.current.slice(0, -1);
+          term.write('\b \b');
+        }
+      } else if (data >= ' ') {
+        inputBufferRef.current += data;
+        term.write(data);
+      }
+    });
+
+    term.write('\x1b[32mFeza Python Lab\x1b[0m — Terminal ready\r\n');
+    term.write('Select \x1b[33mBrowser\x1b[0m or \x1b[36mServer\x1b[0m mode, then press \x1b[32mRun\x1b[0m.\r\n\r\n');
+  }, []);
+
+  // Returns a promise that resolves when user presses Enter in terminal
+  const terminalInput = useCallback((prompt) => {
+    writeToTerminal('\x1b[36m' + prompt + '\x1b[0m');
+    return new Promise((resolve) => {
+      inputBufferRef.current = '';
+      inputResolverRef.current = (value) => resolve(abortRef.current ? '' : value);
+    });
+  }, [writeToTerminal]);
+
+  // ── Load Pyodide ──────────────────────────
   const loadPyodide = async () => {
     setPyodideLoading(true);
-    setOutput('Loading Python environment... (this may take a few seconds)');
-    
+    writeToTerminal('\x1b[33m⏳ Loading Python (Pyodide)… please wait.\x1b[0m\r\n');
+
     try {
-      // Create script element to load Pyodide
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
-      
-      script.onload = async () => {
-        try {
-          // @ts-ignore
-          const pyodideInstance = await window.loadPyodide({
-            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/',
-            stdout: (text) => {
-              setOutput(prev => prev + text + '\n');
-            },
-            stderr: (text) => {
-              setOutput(prev => prev + 'Error: ' + text + '\n');
-            }
-          });
-          
-          setPyodide(pyodideInstance);
-          setPyodideLoaded(true);
-          setOutput('✅ Python environment loaded! Ready to run code.\n');
-          toast.success('Python loaded in browser!');
-        } catch (error) {
-          console.error('Pyodide init error:', error);
-          setOutput('❌ Failed to initialize Python environment. Switching to API mode.');
-          setExecutionMode('api');
-          toast.error('Browser Python failed, using API mode');
-        }
-        setPyodideLoading(false);
-      };
-      
-      script.onerror = () => {
-        setOutput('❌ Failed to load Python environment. Switching to API mode.');
-        setExecutionMode('api');
-        setPyodideLoading(false);
-        toast.error('Could not load browser Python');
-      };
-      
-      document.head.appendChild(script);
-    } catch (error) {
-      console.error('Error loading Pyodide:', error);
-      setOutput('❌ Failed to load Python environment');
-      setPyodideLoading(false);
+      // Pyodide is loaded via script tag (it's a large WASM bundle)
+      if (!window.loadPyodide) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+
+      const py = await window.loadPyodide({
+        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/',
+      });
+
+      setPyodide(py);
+      setPyodideLoaded(true);
+      writeToTerminal('\x1b[32m✅ Python ready! Press Run to execute your code.\x1b[0m\r\n\r\n');
+      toast.success('Python loaded!');
+    } catch (err) {
+      writeToTerminal('\x1b[31m❌ Could not load Pyodide. Switching to Server mode.\x1b[0m\r\n');
       setExecutionMode('api');
+      toast.error('Browser Python failed, using Server mode');
     }
+    setPyodideLoading(false);
   };
 
   const checkApiStatus = async () => {
     setApiStatus('checking');
     try {
-      const response = await fetch('https://emkc.org/api/v2/piston/versions', {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000)
+      const r = await fetch('https://emkc.org/api/v2/piston/versions', {
+        signal: AbortSignal.timeout(5000),
       });
-      
-      if (response.ok) {
-        setApiStatus('online');
-      } else {
-        setApiStatus('offline');
-      }
-    } catch (error) {
-      console.error('API check failed:', error);
+      setApiStatus(r.ok ? 'online' : 'offline');
+    } catch {
       setApiStatus('offline');
     }
   };
 
+  // ── Run: Browser (Pyodide) ────────────────
   const runWithPyodide = async () => {
     if (!pyodide) {
-      setOutput('Python environment not loaded. Please wait...');
+      writeToTerminal('\x1b[31mPython not ready. Please wait for it to load.\x1b[0m\r\n');
       return;
     }
 
+    abortRef.current = false;
     const startTime = performance.now();
-    
+
     try {
-      // Clear previous output
-      setOutput('');
-      
-      // Capture stdout
+      // Expose JS functions that Python calls back into
+      window.__feza_input__ = (prompt) => terminalInput(prompt || '');
+      window.__feza_write__ = (text) => writeToTerminal(text.replace(/\n/g, '\r\n'));
+      window.__feza_err__ = (text) => writeToTerminal('\x1b[31m' + text.replace(/\n/g, '\r\n') + '\x1b[0m');
+
+      // Patch stdout, stderr and input inside Pyodide
       pyodide.runPython(`
-import sys
-from io import StringIO
-sys.stdout = StringIO()
-sys.stderr = StringIO()
-      `);
-      
-      // Run the code
-      await pyodide.runPythonAsync(code);
-      
-      // Get output
-      const stdout = pyodide.runPython('sys.stdout.getvalue()');
-      const stderr = pyodide.runPython('sys.stderr.getvalue()');
-      
-      const endTime = performance.now();
-      setExecutionTime((endTime - startTime).toFixed(2));
-      
-      // Estimate memory (not accurate, but gives idea)
-      const memoryEstimate = Math.round(code.length * 0.1);
-      setMemoryUsed(memoryEstimate);
-      
-      if (stderr) {
-        setOutput(`Errors:\n${stderr}\n\nOutput:\n${stdout}`);
-      } else {
-        setOutput(stdout || 'Code executed successfully (no output)');
-      }
-      
-    } catch (error) {
-      setOutput(`Error: ${error.message}`);
+import sys, builtins, js
+
+class _Out:
+    def write(self, t): js.window.__feza_write__(t)
+    def flush(self): pass
+
+class _Err:
+    def write(self, t): js.window.__feza_err__(t)
+    def flush(self): pass
+
+sys.stdout = _Out()
+sys.stderr = _Err()
+`);
+
+      // Wrap user code in an async function so await works for input()
+      const wrappedCode = `
+import js, builtins, asyncio
+
+async def __main__():
+    async def _input(prompt=''):
+        return await js.window.__feza_input__(str(prompt))
+    builtins.input = lambda p='': asyncio.get_event_loop().run_until_complete(_input(p))
+
+${code.split('\n').map(line => '    ' + line).join('\n')}
+
+asyncio.get_event_loop().run_until_complete(__main__())
+`;
+
+      await pyodide.runPythonAsync(wrappedCode);
+
+      const ms = (performance.now() - startTime).toFixed(0);
+      setExecutionTime(ms);
+      writeToTerminal(`\r\n\x1b[90m─── Done in ${ms}ms ───\x1b[0m\r\n`);
+    } catch (err) {
+      const msg = (err.message || String(err)).replace(/\n/g, '\r\n');
+      writeToTerminal(`\r\n\x1b[31m${msg}\x1b[0m\r\n`);
     }
   };
 
+  // ── Run: Server (Piston API) ──────────────
   const runWithApi = async () => {
+    abortRef.current = false;
     const startTime = performance.now();
-    
+
     try {
-      setOutput('Running on server...');
-      
+      const inputCount = (code.match(/\binput\s*\(/g) || []).length;
+      const stdinLines = [];
+
+      if (inputCount > 0) {
+        writeToTerminal(`\x1b[33mFound ${inputCount} input() call(s). Enter values below:\x1b[0m\r\n`);
+        for (let i = 0; i < inputCount; i++) {
+          if (abortRef.current) return;
+          const val = await terminalInput(`Input #${i + 1}: `);
+          stdinLines.push(val);
+        }
+        writeToTerminal('\r\n\x1b[36m▶ Sending to server…\x1b[0m\r\n\r\n');
+      } else {
+        writeToTerminal('\x1b[36m▶ Running on server…\x1b[0m\r\n\r\n');
+      }
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const tid = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch('https://emkc.org/api/v2/piston/execute', {
         method: 'POST',
@@ -221,542 +326,299 @@ sys.stderr = StringIO()
         body: JSON.stringify({
           language: 'python',
           version: '3.10.0',
-          files: [{ 
-            name: files[currentFile].name,
-            content: code 
-          }]
+          files: [{ name: files[currentFile]?.name || 'main.py', content: code }],
+          stdin: stdinLines.join('\n') + (stdinLines.length ? '\n' : ''),
         }),
-        signal: controller.signal
+        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
-      }
+      clearTimeout(tid);
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
       const result = await response.json();
-      
-      const endTime = performance.now();
-      setExecutionTime((endTime - startTime).toFixed(2));
-      
+      const ms = (performance.now() - startTime).toFixed(0);
+      setExecutionTime(ms);
+
       if (result.run) {
-        const output_text = result.run.output || result.run.stderr || 'No output';
-        setOutput(output_text);
-        
-        // Estimate memory
-        setMemoryUsed(Math.round(code.length * 0.15));
-        
-        if (result.run.stderr) {
-          toast.error('Code executed with errors');
-        }
+        if (result.run.stdout) writeToTerminal(result.run.stdout.replace(/\n/g, '\r\n'));
+        if (result.run.stderr) writeToTerminal('\x1b[31m' + result.run.stderr.replace(/\n/g, '\r\n') + '\x1b[0m');
+        if (!result.run.stdout && !result.run.stderr) writeToTerminal('\x1b[90m(no output)\x1b[0m\r\n');
+        writeToTerminal(`\r\n\x1b[90m─── Done in ${ms}ms ───\x1b[0m\r\n`);
+        if (result.run.stderr) toast.error('Code ran with errors');
       }
-    } catch (error) {
-      console.error('API error:', error);
-      setOutput(`API Error: ${error.message}\n\nTry switching to Browser mode for offline execution.`);
-      
-      // If API fails, suggest switching to browser mode
-      if (executionMode === 'api') {
-        toast.error('API unavailable - consider using Browser mode');
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        writeToTerminal('\x1b[31mRequest timed out.\x1b[0m\r\n');
+      } else {
+        writeToTerminal('\x1b[31mServer error: ' + err.message + '\x1b[0m\r\n');
       }
     }
   };
 
+  // ── Handle Run ────────────────────────────
   const handleRun = async () => {
+    if (isRunning) return;
     setIsRunning(true);
     setExecutionTime(null);
-    setMemoryUsed(null);
-    
-    if (executionMode === 'browser') {
-      await runWithPyodide();
-    } else {
-      await runWithApi();
+    clearTerminal();
+    writeToTerminal(`\x1b[32m❯ Running ${files[currentFile]?.name || 'main.py'}…\x1b[0m\r\n\r\n`);
+
+    try {
+      if (executionMode === 'browser') await runWithPyodide();
+      else await runWithApi();
+    } finally {
+      setIsRunning(false);
     }
-    
+  };
+
+  // ── Handle Stop ───────────────────────────
+  const handleStop = () => {
+    abortRef.current = true;
+    if (inputResolverRef.current) {
+      const r = inputResolverRef.current;
+      inputResolverRef.current = null;
+      r('');
+    }
+    writeToTerminal('\r\n\x1b[31m⛔ Stopped.\x1b[0m\r\n');
     setIsRunning(false);
   };
 
-  const toggleExecutionMode = () => {
-    const newMode = executionMode === 'browser' ? 'api' : 'browser';
-    setExecutionMode(newMode);
-    
-    if (newMode === 'browser' && !pyodideLoaded && !pyodideLoading) {
-      loadPyodide();
-    }
-    
-    toast.success(`Switched to ${newMode === 'browser' ? 'Browser' : 'Server'} execution mode`);
-  };
-
+  // ── File operations ───────────────────────
   const handleSave = async () => {
-    if (!user) {
-      toast.error('Please login to save code');
-      return;
-    }
-
+    if (!user) { toast.error('Please login to save code'); return; }
     try {
-      await codesService.create({
-        title: files[currentFile].name,
-        code: code,
-        author: user.email,
-        user_id: user.id
-      });
+      await codesService.create({ title: files[currentFile]?.name, code, author: user.email, user_id: user.id });
       setLastSaved(new Date());
-      toast.success('Code saved successfully');
-    } catch (error) {
-      toast.error('Failed to save code');
-    }
+      toast.success('Saved!');
+    } catch { toast.error('Failed to save'); }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    toast.success('Code copied to clipboard');
-  };
+  const handleCopy = () => { navigator.clipboard.writeText(code); toast.success('Copied!'); };
 
   const handleDownload = () => {
     const blob = new Blob([code], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = files[currentFile].name;
+    const a = Object.assign(document.createElement('a'), { href: url, download: files[currentFile]?.name || 'main.py' });
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('File downloaded');
   };
 
-  const handleUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const newFile = {
-          id: files.length + 1,
-          name: file.name,
-          content: e.target.result
-        };
-        setFiles([...files, newFile]);
-        setCurrentFile(files.length);
-        setCode(e.target.result);
-        toast.success('File uploaded');
-      };
-      reader.readAsText(file);
-    }
+  const handleUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const f = { id: Date.now(), name: file.name, content: ev.target.result };
+      setFiles(prev => [...prev, f]);
+      setCurrentFile(files.length);
+      setCode(ev.target.result);
+      toast.success('Uploaded!');
+    };
+    reader.readAsText(file);
   };
 
   const createNewFile = () => {
-    const newFileName = `script${files.length + 1}.py`;
-    const newFile = {
-      id: files.length + 1,
-      name: newFileName,
-      content: '# New Python file\n\n'
-    };
-    setFiles([...files, newFile]);
+    const name = `script${files.length + 1}.py`;
+    const f = { id: Date.now(), name, content: '# New file\n\n' };
+    setFiles(prev => [...prev, f]);
     setCurrentFile(files.length);
-    setCode(newFile.content);
-    toast.success(`Created ${newFileName}`);
+    setCode(f.content);
   };
 
   const deleteFile = (index) => {
-    if (files.length === 1) {
-      toast.error('Cannot delete the only file');
-      return;
-    }
-    
-    const newFiles = files.filter((_, i) => i !== index);
-    setFiles(newFiles);
+    if (files.length === 1) { toast.error('Cannot delete the only file'); return; }
+    const updated = files.filter((_, i) => i !== index);
+    setFiles(updated);
     setCurrentFile(0);
-    setCode(newFiles[0].content);
-    toast.success('File deleted');
+    setCode(updated[0].content);
   };
 
   const switchFile = (index) => {
-    const updatedFiles = [...files];
-    updatedFiles[currentFile].content = code;
-    setFiles(updatedFiles);
+    const updated = [...files];
+    updated[currentFile].content = code;
+    setFiles(updated);
     setCurrentFile(index);
     setCode(files[index].content);
   };
 
-  const clearConsole = () => {
-    setOutput('');
-    setExecutionTime(null);
-    setMemoryUsed(null);
-    toast.success('Console cleared');
-  };
-
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
+    if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); setIsFullscreen(true); }
+    else { document.exitFullscreen(); setIsFullscreen(false); }
   };
 
-  const samplePrograms = {
-    hello: 'print("Hello, Feza Programming Club!")',
-    math: `
-# Math operations
-a = 15
-b = 7
-print(f"Addition: {a} + {b} = {a + b}")
-print(f"Subtraction: {a} - {b} = {a - b}")
-print(f"Multiplication: {a} × {b} = {a * b}")
-print(f"Division: {a} ÷ {b} = {a / b}")
-print(f"Power: {a}² = {a ** 2}")
-    `,
-    loop: `
-# Loop and list example
-numbers = [1, 2, 3, 4, 5]
-print("Numbers:", numbers)
-
-print("\\nSquares:")
-for num in numbers:
-    square = num ** 2
-    print(f"{num}² = {square}")
-    `,
-    function: `
-# Function example
-def calculate_average(grades):
-    total = sum(grades)
-    count = len(grades)
-    return total / count
-
-# Test the function
-scores = [85, 90, 78, 92, 88]
-avg = calculate_average(scores)
-print(f"Class scores: {scores}")
-print(f"Average: {avg:.2f}")
-    `,
-    game: `
-# Simple number guessing game
-import random
-
-print("🎮 Number Guessing Game")
-print("I'm thinking of a number between 1 and 20")
-
+  // ── Sample programs ───────────────────────
+  const samples = {
+    hello: `print("Hello, Feza Programming Club!")`,
+    input_demo: `name = input("Enter your name: ")
+age = input("Enter your age: ")
+print(f"Hello {name}, you are {age} years old!")`,
+    math: `a = int(input("First number: "))
+b = int(input("Second number: "))
+print(f"{a} + {b} = {a + b}")
+print(f"{a} - {b} = {a - b}")
+print(f"{a} * {b} = {a * b}")
+print(f"{a} / {b} = {a / b:.2f}")`,
+    game: `import random
+print("🎮 Number Guessing Game (1–20)")
 secret = random.randint(1, 20)
 attempts = 0
-
 while True:
-    try:
-        guess = int(input("Your guess: "))
-        attempts += 1
-        
-        if guess < secret:
-            print("Too low! Try again.")
-        elif guess > secret:
-            print("Too high! Try again.")
-        else:
-            print(f"✨ Correct! You got it in {attempts} attempts!")
-            break
-    except:
-        print("Please enter a number")
-    `
+    guess = int(input("Your guess: "))
+    attempts += 1
+    if guess < secret: print("Too low!")
+    elif guess > secret: print("Too high!")
+    else:
+        print(f"✨ Correct in {attempts} attempts!")
+        break`,
+    loop: `for n in range(1, 6):
+    print(f"{n} squared = {n**2}")`,
   };
 
-  const loadSample = (key) => {
-    setCode(samplePrograms[key]);
-  };
+  const dk = theme === 'dark';
 
   return (
-    <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-gray-900' : 'bg-gray-100'}`}>
-      {/* Menu Bar */}
-      <div className={`${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} shadow-lg px-4 py-2 flex items-center gap-2 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div className="flex items-center gap-2 mr-4">
-          <FaCode className="text-primary-500" />
-          <span className="font-bold">Feza Python Lab</span>
+    <div className={`h-screen flex flex-col ${dk ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800'}`}>
+
+      {/* ── Menu Bar ── */}
+      <div className={`${dk ? 'bg-gray-800' : 'bg-white'} shadow px-3 py-2 flex items-center gap-2 flex-wrap border-b ${dk ? 'border-gray-700' : 'border-gray-200'}`}>
+
+        <div className="flex items-center gap-2 mr-2">
+          <FaCode className="text-blue-400" />
+          <span className="font-bold text-sm">Feza Python Lab</span>
         </div>
 
-        {/* Execution Mode Toggle */}
-        <div className="flex items-center gap-2 mr-4 bg-gray-700 rounded-lg p-1">
+        {/* Mode switcher */}
+        <div className={`flex items-center gap-1 rounded-lg p-1 ${dk ? 'bg-gray-700' : 'bg-gray-200'}`}>
           <button
-            onClick={() => setExecutionMode('browser')}
-            className={`px-3 py-1 rounded flex items-center gap-2 transition ${
-              executionMode === 'browser' 
-                ? 'bg-primary-600 text-white' 
-                : 'text-gray-300 hover:bg-gray-600'
-            }`}
-            title="Run in browser (fast, offline)"
+            onClick={() => { setExecutionMode('browser'); if (!pyodideLoaded && !pyodideLoading) loadPyodide(); }}
+            className={`px-3 py-1 rounded flex items-center gap-1 text-sm transition ${executionMode === 'browser' ? 'bg-blue-600 text-white' : dk ? 'text-gray-300' : 'text-gray-600'}`}
           >
-            <FaRocket />
-            <span className="text-sm hidden md:inline">Browser</span>
+            <FaRocket size={10} /> Browser
           </button>
           <button
             onClick={() => setExecutionMode('api')}
-            className={`px-3 py-1 rounded flex items-center gap-2 transition ${
-              executionMode === 'api' 
-                ? 'bg-primary-600 text-white' 
-                : 'text-gray-300 hover:bg-gray-600'
-            }`}
-            title="Run on server (more packages)"
+            className={`px-3 py-1 rounded flex items-center gap-1 text-sm transition ${executionMode === 'api' ? 'bg-blue-600 text-white' : dk ? 'text-gray-300' : 'text-gray-600'}`}
           >
-            <FaServer />
-            <span className="text-sm hidden md:inline">Server</span>
+            <FaServer size={10} /> Server
           </button>
         </div>
 
-        {/* Status Indicators */}
-        <div className="flex items-center gap-2 mr-2">
-          {executionMode === 'browser' && (
-            <>
-              {pyodideLoading && (
-                <span className="text-yellow-500 text-xs flex items-center gap-1">
-                  <span className="animate-spin">⏳</span> Loading Python...
-                </span>
-              )}
-              {pyodideLoaded && (
-                <span className="text-green-500 text-xs flex items-center gap-1">
-                  <span>✅</span> Python Ready
-                </span>
-              )}
-            </>
-          )}
-          {executionMode === 'api' && (
-            <>
-              {apiStatus === 'online' && (
-                <span className="text-green-500 text-xs flex items-center gap-1">
-                  <FaWifi /> Server Online
-                </span>
-              )}
-              {apiStatus === 'offline' && (
-                <span className="text-red-500 text-xs flex items-center gap-1">
-                  <FaExclamationTriangle /> Server Offline
-                </span>
-              )}
-            </>
-          )}
+        {/* Status */}
+        <div className="text-xs min-w-[80px]">
+          {executionMode === 'browser' && pyodideLoading && <span className="text-yellow-400">⏳ Loading…</span>}
+          {executionMode === 'browser' && pyodideLoaded && <span className="text-green-400">✅ Ready</span>}
+          {executionMode === 'browser' && !pyodideLoaded && !pyodideLoading && <span className="text-gray-400">Not loaded</span>}
+          {executionMode === 'api' && apiStatus === 'online' && <span className="text-green-400 flex items-center gap-1"><FaWifi size={10} /> Online</span>}
+          {executionMode === 'api' && apiStatus === 'offline' && <span className="text-red-400 flex items-center gap-1"><FaExclamationTriangle size={10} /> Offline</span>}
         </div>
 
-        {/* Run Button */}
-        <button
-          onClick={handleRun}
-          disabled={isRunning || (executionMode === 'browser' && !pyodideLoaded)}
-          className={`p-2 rounded flex items-center gap-2 ${
-            theme === 'dark' 
-              ? 'hover:bg-gray-700 text-green-400' 
-              : 'hover:bg-gray-100 text-green-600'
-          } ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title="Run (F5)"
-        >
-          <FaPlay />
-          <span className="text-sm hidden md:inline">{isRunning ? 'Running...' : 'Run'}</span>
-        </button>
+        {/* Run / Stop */}
+        {!isRunning ? (
+          <button
+            onClick={handleRun}
+            disabled={executionMode === 'browser' && !pyodideLoaded}
+            className="px-3 py-1.5 rounded flex items-center gap-2 text-sm font-semibold bg-green-600 hover:bg-green-500 text-white transition disabled:opacity-40"
+          >
+            <FaPlay size={10} /> Run
+          </button>
+        ) : (
+          <button
+            onClick={handleStop}
+            className="px-3 py-1.5 rounded flex items-center gap-2 text-sm font-semibold bg-red-600 hover:bg-red-500 text-white transition"
+          >
+            <FaStop size={10} /> Stop
+          </button>
+        )}
 
-        {/* Save Button */}
-        <button
-          onClick={handleSave}
-          className={`p-2 rounded flex items-center gap-2 ${
-            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-          }`}
-          title="Save (Ctrl+S)"
-        >
-          <FaSave className="text-blue-500" />
-          <span className="text-sm hidden md:inline">Save</span>
-        </button>
+        {/* Toolbar */}
+        <div className="flex items-center gap-1">
+          <button onClick={handleSave} title="Save" className={`p-2 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}><FaSave className="text-blue-400" /></button>
+          <button onClick={handleCopy} title="Copy" className={`p-2 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}><FaCopy /></button>
+          <button onClick={handleDownload} title="Download" className={`p-2 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}><FaDownload /></button>
+          <label title="Upload" className={`p-2 rounded cursor-pointer ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}>
+            <FaUpload />
+            <input type="file" accept=".py" onChange={handleUpload} className="hidden" />
+          </label>
+        </div>
 
-        {/* Copy Button */}
-        <button
-          onClick={handleCopy}
-          className={`p-2 rounded ${
-            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-          }`}
-          title="Copy"
-        >
-          <FaCopy />
-        </button>
+        <div className="w-px h-5 bg-gray-600 mx-1" />
 
-        {/* Download Button */}
-        <button
-          onClick={handleDownload}
-          className={`p-2 rounded ${
-            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-          }`}
-          title="Download"
-        >
-          <FaDownload />
-        </button>
-
-        {/* Upload Button */}
-        <label className={`p-2 rounded cursor-pointer ${
-          theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-        }`} title="Upload">
-          <FaUpload />
-          <input type="file" accept=".py" onChange={handleUpload} className="hidden" />
-        </label>
-
-        <div className="w-px h-6 bg-gray-600 mx-2"></div>
-
-        {/* Sample Programs Dropdown */}
         <select
-          onChange={(e) => loadSample(e.target.value)}
-          className={`px-3 py-1 rounded text-sm ${
-            theme === 'dark' 
-              ? 'bg-gray-700 text-white' 
-              : 'bg-gray-200 text-gray-800'
-          }`}
-          defaultValue=""
+          onChange={(e) => { if (e.target.value) setCode(samples[e.target.value]); }}
+          value=""
+          className={`px-2 py-1 rounded text-sm ${dk ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-800'}`}
         >
           <option value="" disabled>Load Example</option>
           <option value="hello">Hello World</option>
-          <option value="math">Math Operations</option>
-          <option value="loop">Loop Example</option>
-          <option value="function">Function Example</option>
+          <option value="input_demo">Input Demo ✨</option>
+          <option value="math">Math + Input</option>
           <option value="game">Guessing Game</option>
+          <option value="loop">Loop Example</option>
         </select>
 
-        <div className="w-px h-6 bg-gray-600 mx-2"></div>
+        <div className="w-px h-5 bg-gray-600 mx-1" />
 
-        {/* Theme Toggle */}
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className={`p-2 rounded ${
-            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-          }`}
-          title="Toggle Theme"
-        >
-          {theme === 'dark' ? <FaSun className="text-yellow-500" /> : <FaMoon className="text-gray-700" />}
+        <button onClick={() => setTheme(dk ? 'light' : 'dark')} className={`p-2 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}>
+          {dk ? <FaSun className="text-yellow-400" /> : <FaMoon />}
         </button>
-
-        {/* Console Toggle */}
-        <button
-          onClick={() => setShowConsole(!showConsole)}
-          className={`p-2 rounded ${
-            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-          }`}
-          title="Toggle Console"
-        >
-          <FaTerminal />
+        <button onClick={() => setShowConsole(v => !v)} title="Toggle Terminal" className={`p-2 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}>
+          <FaTerminal className={showConsole ? 'text-green-400' : ''} />
         </button>
-
-        {/* Settings Toggle */}
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className={`p-2 rounded ${
-            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-          }`}
-          title="Settings"
-        >
+        <button onClick={() => setShowSettings(v => !v)} className={`p-2 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}>
           <FaCog />
         </button>
-
-        {/* Fullscreen Toggle */}
-        <button
-          onClick={toggleFullscreen}
-          className={`p-2 rounded ${
-            theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-          }`}
-          title="Fullscreen"
-        >
+        <button onClick={toggleFullscreen} className={`p-2 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}>
           {isFullscreen ? <FaCompress /> : <FaExpand />}
         </button>
 
-        {lastSaved && (
-          <span className={`text-xs ml-auto ${
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-          }`}>
-            Saved: {lastSaved.toLocaleTimeString()}
-          </span>
-        )}
+        {lastSaved && <span className="text-xs text-gray-400 ml-auto">Saved {lastSaved.toLocaleTimeString()}</span>}
       </div>
 
-      {/* Settings Panel */}
+      {/* ── Settings ── */}
       {showSettings && (
-        <div className={`${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-          <h3 className="font-bold mb-3">Editor Settings</h3>
-          <div className="flex gap-6">
-            <div>
-              <label className="block text-sm mb-1">Font Size</label>
-              <input
-                type="range"
-                min="10"
-                max="24"
-                value={fontSize}
-                onChange={(e) => setFontSize(parseInt(e.target.value))}
-                className="w-32"
-              />
-              <span className="text-sm ml-2">{fontSize}px</span>
-            </div>
-            <div>
-              <label className="block text-sm mb-1">Auto Save</label>
-              <button
-                onClick={() => setAutoSave(!autoSave)}
-                className={`px-3 py-1 rounded text-sm ${
-                  autoSave 
-                    ? 'bg-green-600 text-white' 
-                    : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                }`}
-              >
-                {autoSave ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            <div>
-              <label className="block text-sm mb-1">Execution Mode</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setExecutionMode('browser')}
-                  className={`px-3 py-1 rounded text-sm ${
-                    executionMode === 'browser'
-                      ? 'bg-primary-600 text-white'
-                      : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}
-                >
-                  Browser (Fast)
-                </button>
-                <button
-                  onClick={() => setExecutionMode('api')}
-                  className={`px-3 py-1 rounded text-sm ${
-                    executionMode === 'api'
-                      ? 'bg-primary-600 text-white'
-                      : theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}
-                >
-                  Server (More Features)
-                </button>
-              </div>
-            </div>
+        <div className={`${dk ? 'bg-gray-800' : 'bg-white'} px-4 py-3 border-b ${dk ? 'border-gray-700' : 'border-gray-200'} flex gap-6 flex-wrap text-sm`}>
+          <div className="flex items-center gap-3">
+            <label>Font Size</label>
+            <input type="range" min="10" max="24" value={fontSize} onChange={(e) => setFontSize(+e.target.value)} className="w-28" />
+            <span>{fontSize}px</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <label>Auto Save</label>
+            <button onClick={() => setAutoSave(v => !v)} className={`px-3 py-1 rounded ${autoSave ? 'bg-green-600 text-white' : dk ? 'bg-gray-700' : 'bg-gray-200'}`}>
+              {autoSave ? 'ON' : 'OFF'}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Main Editor Area */}
+      {/* ── Editor + File Explorer ── */}
       <div className="flex-1 flex overflow-hidden">
-        {/* File Explorer */}
-        <div className={`w-48 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-800'} p-2 overflow-y-auto border-r ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+
+        {/* Files */}
+        <div className={`w-44 ${dk ? 'bg-gray-800' : 'bg-gray-50'} p-2 border-r ${dk ? 'border-gray-700' : 'border-gray-200'} overflow-y-auto`}>
           <div className="flex justify-between items-center mb-2">
-            <h3 className="text-sm font-bold">FILES</h3>
-            <button
-              onClick={createNewFile}
-              className={`p-1 rounded ${
-                theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
-              }`}
-              title="New File"
-            >
-              <FaPlus size={12} />
-            </button>
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Files</span>
+            <button onClick={createNewFile} className={`p-1 rounded ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'}`}><FaPlus size={11} /></button>
           </div>
           {files.map((file, index) => (
             <div
               key={file.id}
-              className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer ${
-                currentFile === index
-                  ? theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                  : theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-              }`}
               onClick={() => switchFile(index)}
+              className={`group flex items-center justify-between px-2 py-1.5 rounded cursor-pointer text-sm mb-0.5 ${
+                currentFile === index
+                  ? dk ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
+                  : dk ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
+              }`}
             >
-              <div className="flex items-center gap-2">
-                <FaFile size={12} className="text-gray-400" />
-                <span className="text-sm truncate max-w-[100px]">{file.name}</span>
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <FaFile size={10} className="text-gray-400 flex-shrink-0" />
+                <span className="truncate">{file.name}</span>
               </div>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteFile(index);
-                }}
+                onClick={(e) => { e.stopPropagation(); deleteFile(index); }}
                 className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400"
               >
-                <FaTrash size={10} />
+                <FaTrash size={9} />
               </button>
             </div>
           ))}
@@ -767,9 +629,9 @@ while True:
           <Editor
             height="100%"
             defaultLanguage="python"
-            theme={theme === 'dark' ? 'vs-dark' : 'light'}
+            theme={dk ? 'vs-dark' : 'light'}
             value={code}
-            onChange={(value) => setCode(value || '')}
+            onChange={(v) => setCode(v || '')}
             options={{
               fontSize,
               minimap: { enabled: true },
@@ -777,73 +639,58 @@ while True:
               automaticLayout: true,
               scrollBeyondLastLine: false,
               wordWrap: 'on',
-              suggestOnTriggerCharacters: true,
               formatOnPaste: true,
               formatOnType: true,
-              renderWhitespace: 'selection',
               bracketPairColorization: { enabled: true },
-              guides: { bracketPairs: true },
               folding: true,
-              foldingHighlight: true,
               matchBrackets: 'always',
               autoClosingBrackets: 'always',
               autoClosingQuotes: 'always',
               quickSuggestions: true,
               tabCompletion: 'on',
-              wordBasedSuggestions: true,
             }}
           />
         </div>
       </div>
 
-      {/* Console/Output Panel */}
+      {/* ── Terminal Panel ── */}
       {showConsole && (
-        <div className={`h-64 ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-800'} border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'} flex flex-col`}>
-          <div className={`px-4 py-2 flex justify-between items-center border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <FaTerminal className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} />
-                <span className="font-bold text-sm">Console</span>
-              </div>
-              
-              {/* Execution Stats */}
-              {executionTime && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="flex items-center gap-1 text-gray-500">
-                    <FaClock /> {executionTime}ms
-                  </span>
-                  {memoryUsed && (
-                    <span className="text-gray-500">
-                      | ~{memoryUsed} KB
-                    </span>
-                  )}
-                </div>
-              )}
+        <div style={{ height: '280px' }} className={`flex flex-col border-t ${dk ? 'border-gray-700' : 'border-gray-300'}`}>
 
-              {/* Mode Indicator */}
-              <span className={`text-xs px-2 py-0.5 rounded ${
-                executionMode === 'browser' 
-                  ? 'bg-purple-100 text-purple-700' 
-                  : 'bg-blue-100 text-blue-700'
-              }`}>
-                {executionMode === 'browser' ? '🚀 Browser Mode' : '🌐 Server Mode'}
+          {/* Header */}
+          <div className={`flex items-center justify-between px-3 py-1.5 border-b flex-shrink-0 ${dk ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-300'}`}>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                <div className="w-3 h-3 rounded-full bg-green-500" />
+              </div>
+              <span className="text-xs font-mono text-gray-400">
+                {executionMode === 'browser' ? '🚀 Browser Terminal' : '🌐 Server Terminal'}
+                {executionTime && <span className="ml-2 text-gray-500">({executionTime}ms)</span>}
               </span>
+              {isRunning && (
+                <span className="flex items-center gap-1 text-xs text-green-400">
+                  <span className="animate-pulse">●</span> Running…
+                </span>
+              )}
             </div>
-            
             <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 hidden md:block">
+                {executionMode === 'browser' ? 'Type responses directly in terminal' : 'Values collected before run'}
+              </span>
               <button
-                onClick={clearConsole}
-                className={`text-xs px-2 py-1 rounded ${
-                  theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
-                }`}
+                onClick={clearTerminal}
+                className={`text-xs px-2 py-0.5 rounded ${dk ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'}`}
               >
                 Clear
               </button>
             </div>
           </div>
-          
-          <div className="flex-1 overflow-auto p-4 font-mono text-sm">
-            <pre className="whitespace-pre-wrap">{output || 'Ready to run Python code...'}</pre>
+
+          {/* xterm.js renders here */}
+          <div className="flex-1 overflow-hidden">
+            <XtermTerminal terminalRef={terminalRef} onReady={onTerminalReady} />
           </div>
         </div>
       )}

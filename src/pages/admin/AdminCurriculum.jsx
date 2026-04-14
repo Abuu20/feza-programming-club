@@ -5,7 +5,8 @@ import {
   FaPlus, FaEdit, FaTrash, FaBookOpen, FaClock, FaCode, 
   FaImage, FaProjectDiagram, FaLightbulb, FaChevronDown, 
   FaChevronUp, FaTimes, FaUpload, FaSpinner, FaSave, FaEye,
-  FaCopy, FaCheck, FaArrowLeft, FaArrowRight, FaVideo, FaFileAlt
+  FaCopy, FaCheck, FaArrowLeft, FaArrowRight, FaVideo, FaFileAlt,
+  FaGripVertical, FaStar, FaList, FaChartLine
 } from 'react-icons/fa';
 import Loader from '../../components/common/Loader';
 import toast from 'react-hot-toast';
@@ -14,7 +15,7 @@ const AdminCurriculum = () => {
   const [modules, setModules] = useState([]);
   const [lessons, setLessons] = useState({});
   const [attachments, setAttachments] = useState({});
-  const [miniProjects, setMiniProjects] = useState({});
+  const [miniProjects, setMiniProjects] = useState({}); // Now stores array of projects per lesson
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showModuleModal, setShowModuleModal] = useState(false);
@@ -26,6 +27,7 @@ const AdminCurriculum = () => {
   const [selectedLessonId, setSelectedLessonId] = useState(null);
   const [selectedModuleId, setSelectedModuleId] = useState(null);
   const [expandedModules, setExpandedModules] = useState({});
+  const [expandedProjects, setExpandedProjects] = useState({});
   const [activeTab, setActiveTab] = useState('basic');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
@@ -49,16 +51,16 @@ const AdminCurriculum = () => {
     difficulty: 'beginner',
     order_number: 0,
     estimated_time: 30,
-    prerequisites: [], // Changed to array
-    learning_outcomes: [], // Changed to array
-    key_takeaways: [], // Changed to array
-    common_mistakes: [], // Changed to array
+    prerequisites: [],
+    learning_outcomes: [],
+    key_takeaways: [],
+    common_mistakes: [],
     code_examples: [],
     is_published: true,
     module_id: null
   });
 
-  // Form state for Mini Project
+  // Form state for Mini Project (single project editing)
   const [projectForm, setProjectForm] = useState({
     title: '',
     description: '',
@@ -69,7 +71,8 @@ const AdminCurriculum = () => {
     expected_output: '',
     output_image_url: '',
     hints: [],
-    learning_goals: []
+    learning_goals: [],
+    order_number: 0
   });
 
   // Color options
@@ -94,7 +97,7 @@ const AdminCurriculum = () => {
     { name: 'Rocket', icon: '🚀' },
     { name: 'Star', icon: '⭐' },
     { name: 'Lightbulb', icon: '💡' },
-    {name: 'Gear', icon: '⚙️' },
+    { name: 'Gear', icon: '⚙️' },
     { name: 'Folder', icon: '📁' },
     { name: 'Target', icon: '🎯' },
     { name: 'Brain', icon: '🧠' },
@@ -108,13 +111,10 @@ const AdminCurriculum = () => {
     if (Array.isArray(value)) return value;
     if (typeof value === 'string') {
       try {
-        // Handle PostgreSQL array format like {"val1","val2"}
         if (value.startsWith('{') && value.endsWith('}')) {
-          // Remove the curly braces
           const cleaned = value.slice(1, -1);
           if (!cleaned) return [];
           
-          // Parse PostgreSQL array format
           const items = [];
           let current = '';
           let inQuotes = false;
@@ -143,11 +143,8 @@ const AdminCurriculum = () => {
             }
             items.push(item);
           }
-          
           return items;
         }
-        
-        // Try JSON parse
         const parsed = JSON.parse(value);
         return Array.isArray(parsed) ? parsed : [];
       } catch (e) {
@@ -158,19 +155,17 @@ const AdminCurriculum = () => {
     return [];
   };
 
-  // Helper to convert string with line breaks to array
   const stringToArray = (str) => {
     if (!str) return [];
     return str.split('\n').filter(line => line.trim());
   };
 
-  // Helper to convert array to string with line breaks for textareas
   const arrayToString = (arr) => {
     if (!arr || !Array.isArray(arr)) return '';
     return arr.join('\n');
   };
 
-  // Check Supabase connection on mount
+  // Check Supabase connection
   useEffect(() => {
     const checkConnection = async () => {
       try {
@@ -186,7 +181,6 @@ const AdminCurriculum = () => {
     checkConnection();
   }, []);
 
-  // Load only modules first
   useEffect(() => {
     fetchModules();
   }, []);
@@ -213,9 +207,8 @@ const AdminCurriculum = () => {
     }
   };
 
-  // Load lessons for a specific module when expanded
   const loadModuleLessons = async (moduleId) => {
-    if (lessons[moduleId]) return; // Already loaded
+    if (lessons[moduleId]) return;
 
     setLoadingMore(true);
     try {
@@ -227,7 +220,6 @@ const AdminCurriculum = () => {
 
       if (lessonsError) throw lessonsError;
 
-      // Parse all array fields for each lesson
       const parsedLessons = (lessonsData || []).map(lesson => ({
         ...lesson,
         prerequisites: safelyParseArray(lesson.prerequisites),
@@ -256,14 +248,18 @@ const AdminCurriculum = () => {
           });
         }
         
+        // Fetch multiple projects per lesson
         const { data: projectsData } = await supabase
           .from('mini_projects')
           .select('*')
-          .in('lesson_id', lessonIds);
+          .in('lesson_id', lessonIds)
+          .order('order_number', { ascending: true });
         
         if (projectsData) {
+          // Group projects by lesson_id (array of projects per lesson)
           projectsData.forEach(proj => {
-            projectsMap[proj.lesson_id] = proj;
+            if (!projectsMap[proj.lesson_id]) projectsMap[proj.lesson_id] = [];
+            projectsMap[proj.lesson_id].push(proj);
           });
         }
       }
@@ -290,6 +286,13 @@ const AdminCurriculum = () => {
     if (isExpanding && !lessons[moduleId]) {
       await loadModuleLessons(moduleId);
     }
+  };
+
+  const toggleProjects = (lessonId) => {
+    setExpandedProjects(prev => ({
+      ...prev,
+      [lessonId]: !prev[lessonId]
+    }));
   };
 
   // ==================== MODULE CRUD ====================
@@ -437,7 +440,6 @@ const AdminCurriculum = () => {
     }
 
     try {
-      // Ensure all array fields are proper arrays
       const prerequisites = Array.isArray(lessonForm.prerequisites) 
         ? lessonForm.prerequisites.filter(p => p && p.trim())
         : [];
@@ -539,6 +541,159 @@ const AdminCurriculum = () => {
     }
   };
 
+  // ==================== MULTIPLE MINI PROJECTS CRUD ====================
+  const openProjectEditor = (lessonId, project = null) => {
+    setSelectedLessonId(lessonId);
+    if (project) {
+      setEditingProject(project);
+      setProjectForm({
+        title: project.title || '',
+        description: project.description || '',
+        difficulty: project.difficulty || 'beginner',
+        estimated_time: project.estimated_time || 30,
+        starter_code: project.starter_code || '# Write your code here\n\ndef main():\n    # Your code here\n    pass\n\nif __name__ == "__main__":\n    main()',
+        solution_code: project.solution_code || '',
+        expected_output: project.expected_output || '',
+        output_image_url: project.output_image_url || '',
+        hints: safelyParseArray(project.hints),
+        learning_goals: safelyParseArray(project.learning_goals),
+        order_number: project.order_number || 0
+      });
+    } else {
+      setEditingProject(null);
+      const currentProjects = miniProjects[lessonId] || [];
+      setProjectForm({
+        title: '',
+        description: '',
+        difficulty: 'beginner',
+        estimated_time: 30,
+        starter_code: '# Write your code here\n\ndef main():\n    # Your code here\n    pass\n\nif __name__ == "__main__":\n    main()',
+        solution_code: '',
+        expected_output: '',
+        output_image_url: '',
+        hints: [],
+        learning_goals: [],
+        order_number: currentProjects.length
+      });
+    }
+    setShowProjectModal(true);
+  };
+
+  const saveMiniProject = async () => {
+    if (!projectForm.title.trim()) {
+      toast.error('Project title is required');
+      return;
+    }
+
+    try {
+      const cleanHints = (projectForm.hints || []).filter(h => h && h.trim());
+      const cleanGoals = (projectForm.learning_goals || []).filter(g => g && g.trim());
+
+      const projectData = {
+        title: projectForm.title,
+        description: projectForm.description || null,
+        difficulty: projectForm.difficulty,
+        estimated_time: parseInt(projectForm.estimated_time) || 30,
+        starter_code: projectForm.starter_code || null,
+        solution_code: projectForm.solution_code || null,
+        expected_output: projectForm.expected_output || null,
+        output_image_url: projectForm.output_image_url || null,
+        hints: cleanHints.length > 0 ? cleanHints : null,
+        learning_goals: cleanGoals.length > 0 ? cleanGoals : null,
+        order_number: parseInt(projectForm.order_number) || 0,
+        lesson_id: selectedLessonId
+      };
+      
+      let savedProject = null;
+
+      if (editingProject) {
+        const { data, error } = await supabase
+          .from('mini_projects')
+          .update(projectData)
+          .eq('id', editingProject.id)
+          .select();
+        
+        if (error) throw error;
+        savedProject = data?.[0];
+        toast.success('Project updated successfully');
+        
+        // Update the projects list
+        const currentProjects = miniProjects[selectedLessonId] || [];
+        const updatedProjects = currentProjects.map(p => 
+          p.id === editingProject.id ? savedProject : p
+        );
+        setMiniProjects(prev => ({ ...prev, [selectedLessonId]: updatedProjects }));
+      } else {
+        const { data, error } = await supabase
+          .from('mini_projects')
+          .insert([projectData])
+          .select();
+        
+        if (error) throw error;
+        savedProject = data?.[0];
+        toast.success('Project created successfully');
+        
+        if (savedProject) {
+          const currentProjects = miniProjects[selectedLessonId] || [];
+          setMiniProjects(prev => ({ 
+            ...prev, 
+            [selectedLessonId]: [...currentProjects, savedProject] 
+          }));
+        }
+      }
+      setShowProjectModal(false);
+    } catch (error) {
+      console.error('Save project error:', error);
+      toast.error(error.message || 'Failed to save project');
+    }
+  };
+
+  const deleteProject = async (projectId, lessonId) => {
+    if (window.confirm('Delete this mini-project?')) {
+      try {
+        const { error } = await supabase
+          .from('mini_projects')
+          .delete()
+          .eq('id', projectId);
+        
+        if (error) throw error;
+        
+        toast.success('Project deleted');
+        const currentProjects = miniProjects[lessonId] || [];
+        const updatedProjects = currentProjects.filter(p => p.id !== projectId);
+        setMiniProjects(prev => ({ ...prev, [lessonId]: updatedProjects }));
+      } catch (error) {
+        console.error('Delete project error:', error);
+        toast.error('Failed to delete project: ' + error.message);
+      }
+    }
+  };
+
+  const moveProject = async (lessonId, projectId, direction) => {
+    const projects = [...(miniProjects[lessonId] || [])];
+    const index = projects.findIndex(p => p.id === projectId);
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    if (newIndex < 0 || newIndex >= projects.length) return;
+    
+    // Swap order numbers
+    const tempOrder = projects[index].order_number;
+    projects[index].order_number = projects[newIndex].order_number;
+    projects[newIndex].order_number = tempOrder;
+    
+    // Update in database
+    for (const project of [projects[index], projects[newIndex]]) {
+      await supabase
+        .from('mini_projects')
+        .update({ order_number: project.order_number })
+        .eq('id', project.id);
+    }
+    
+    // Sort projects by order_number
+    projects.sort((a, b) => a.order_number - b.order_number);
+    setMiniProjects(prev => ({ ...prev, [lessonId]: projects }));
+  };
+
   // ==================== CODE EXAMPLES ====================
   const addCodeExample = () => {
     setLessonForm({
@@ -570,7 +725,6 @@ const AdminCurriculum = () => {
 
     const fileArray = Array.from(files);
 
-    // Validate all files first
     for (const file of fileArray) {
       if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
         toast.error(`"${file.name}" is not an image or PDF`);
@@ -627,7 +781,6 @@ const AdminCurriculum = () => {
         }
       }
 
-      // Refresh attachments list once after all uploads
       const { data: newAttachments } = await supabase
         .from('lesson_attachments')
         .select('*')
@@ -675,126 +828,6 @@ const AdminCurriculum = () => {
     }
   };
 
-  // ==================== MINI PROJECT ====================
-  const openProjectEditor = (lessonId) => {
-    setSelectedLessonId(lessonId);
-    const existingProject = miniProjects[lessonId];
-    
-    if (existingProject) {
-      setEditingProject(existingProject);
-      setProjectForm({
-        title: existingProject.title || '',
-        description: existingProject.description || '',
-        difficulty: existingProject.difficulty || 'beginner',
-        estimated_time: existingProject.estimated_time || 30,
-        starter_code: existingProject.starter_code || '# Write your code here\n\ndef main():\n    # Your code here\n    pass\n\nif __name__ == "__main__":\n    main()',
-        solution_code: existingProject.solution_code || '',
-        expected_output: existingProject.expected_output || '',
-        output_image_url: existingProject.output_image_url || '',
-        hints: safelyParseArray(existingProject.hints),
-        learning_goals: safelyParseArray(existingProject.learning_goals)
-      });
-    } else {
-      setEditingProject(null);
-      setProjectForm({
-        title: '',
-        description: '',
-        difficulty: 'beginner',
-        estimated_time: 30,
-        starter_code: '# Write your code here\n\ndef main():\n    # Your code here\n    pass\n\nif __name__ == "__main__":\n    main()',
-        solution_code: '',
-        expected_output: '',
-        output_image_url: '',
-        hints: [],
-        learning_goals: []
-      });
-    }
-    setShowProjectModal(true);
-  };
-
-  const saveMiniProject = async () => {
-    if (!projectForm.title.trim()) {
-      toast.error('Project title is required');
-      return;
-    }
-
-    try {
-      const cleanHints = (projectForm.hints || []).filter(h => h && h.trim());
-      const cleanGoals = (projectForm.learning_goals || []).filter(g => g && g.trim());
-
-      const projectData = {
-        title: projectForm.title,
-        description: projectForm.description || null,
-        difficulty: projectForm.difficulty,
-        estimated_time: parseInt(projectForm.estimated_time) || 30,
-        starter_code: projectForm.starter_code || null,
-        solution_code: projectForm.solution_code || null,
-        expected_output: projectForm.expected_output || null,
-        output_image_url: projectForm.output_image_url || null,
-        hints: cleanHints.length > 0 ? cleanHints : null,
-        learning_goals: cleanGoals.length > 0 ? cleanGoals : null,
-        lesson_id: selectedLessonId
-      };
-      
-      let savedProject = null;
-
-      if (editingProject) {
-        const { data, error } = await supabase
-          .from('mini_projects')
-          .update(projectData)
-          .eq('id', editingProject.id)
-          .select();
-        
-        if (error) throw error;
-        savedProject = data?.[0];
-        toast.success('Project updated successfully');
-        
-        setMiniProjects(prev => ({ ...prev, [selectedLessonId]: savedProject || { ...editingProject, ...projectData } }));
-      } else {
-        const { data, error } = await supabase
-          .from('mini_projects')
-          .insert([projectData])
-          .select();
-        
-        if (error) throw error;
-        savedProject = data?.[0];
-        toast.success('Project created successfully');
-        
-        if (savedProject) {
-          setMiniProjects(prev => ({ ...prev, [selectedLessonId]: savedProject }));
-        }
-      }
-      setShowProjectModal(false);
-    } catch (error) {
-      console.error('Save project error:', error);
-      toast.error(error.message || 'Failed to save project');
-    }
-  };
-
-  const deleteProject = async (lessonId) => {
-    const project = miniProjects[lessonId];
-    if (project && window.confirm('Delete this mini-project?')) {
-      try {
-        const { error } = await supabase
-          .from('mini_projects')
-          .delete()
-          .eq('id', project.id);
-        
-        if (error) throw error;
-        
-        toast.success('Project deleted');
-        setMiniProjects(prev => {
-          const newProjects = { ...prev };
-          delete newProjects[lessonId];
-          return newProjects;
-        });
-      } catch (error) {
-        console.error('Delete project error:', error);
-        toast.error('Failed to delete project: ' + error.message);
-      }
-    }
-  };
-
   // Project helpers
   const addHint = () => {
     setProjectForm({
@@ -832,7 +865,6 @@ const AdminCurriculum = () => {
     setProjectForm({ ...projectForm, learning_goals: newGoals });
   };
 
-  // Retry connection
   const retryConnection = () => {
     setConnectionError(false);
     fetchModules();
@@ -864,7 +896,7 @@ const AdminCurriculum = () => {
       <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold">📚 Curriculum Manager</h1>
-          <p className="text-gray-600">Create lessons with images, code examples, and mini-projects</p>
+          <p className="text-gray-600">Create lessons with images, code examples, and multiple mini-projects</p>
         </div>
         <button 
           onClick={() => openModuleModal()} 
@@ -895,7 +927,7 @@ const AdminCurriculum = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <div className="text-sm text-gray-500">Mini-Projects</div>
           <div className="text-2xl font-bold">
-            {Object.values(miniProjects).filter(p => p).length}
+            {Object.values(miniProjects).flat().filter(p => p).length}
           </div>
         </div>
       </div>
@@ -905,6 +937,8 @@ const AdminCurriculum = () => {
         {modules.map((module, moduleIdx) => {
           const moduleLessons = lessons[module.id] || [];
           const publishedLessons = moduleLessons.filter(l => l.is_published).length;
+          const totalProjects = moduleLessons.reduce((sum, lesson) => 
+            sum + (miniProjects[lesson.id]?.length || 0), 0);
           
           return (
             <div key={module.id} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
@@ -925,6 +959,7 @@ const AdminCurriculum = () => {
                       <div className="flex items-center gap-3 mt-2 text-xs">
                         <span className="text-gray-500">{moduleLessons.length} lessons</span>
                         <span className="text-green-600">{publishedLessons} published</span>
+                        <span className="text-purple-600">{totalProjects} projects</span>
                         {!module.is_published && (
                           <span className="text-orange-500 bg-orange-50 px-2 py-0.5 rounded">Draft</span>
                         )}
@@ -983,130 +1018,230 @@ const AdminCurriculum = () => {
                           </div>
                         )}
                         
-                        {moduleLessons.map((lesson, lessonIdx) => (
-                          <div key={lesson.id} className="bg-white rounded-lg border shadow-sm hover:shadow-md transition">
-                            <div className="p-4">
-                              <div className="flex justify-between items-start flex-wrap gap-2">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-gray-400 text-sm">#{lessonIdx + 1}</span>
-                                    <h3 className="font-semibold text-lg">{lesson.title}</h3>
-                                    <span className={`text-xs px-2 py-0.5 rounded ${
-                                      lesson.difficulty === 'beginner' ? 'bg-green-100 text-green-700' :
-                                      lesson.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
-                                      'bg-red-100 text-red-700'
-                                    }`}>
-                                      {lesson.difficulty}
-                                    </span>
-                                    {!lesson.is_published && (
-                                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Draft</span>
-                                    )}
+                        {moduleLessons.map((lesson, lessonIdx) => {
+                          const lessonProjects = miniProjects[lesson.id] || [];
+                          
+                          return (
+                            <div key={lesson.id} className="bg-white rounded-lg border shadow-sm hover:shadow-md transition">
+                              <div className="p-4">
+                                <div className="flex justify-between items-start flex-wrap gap-2">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-gray-400 text-sm">#{lessonIdx + 1}</span>
+                                      <h3 className="font-semibold text-lg">{lesson.title}</h3>
+                                      <span className={`text-xs px-2 py-0.5 rounded ${
+                                        lesson.difficulty === 'beginner' ? 'bg-green-100 text-green-700' :
+                                        lesson.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-700' :
+                                        'bg-red-100 text-red-700'
+                                      }`}>
+                                        {lesson.difficulty}
+                                      </span>
+                                      {!lesson.is_published && (
+                                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Draft</span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-gray-600 mt-1">{lesson.description?.substring(0, 100)}</p>
+                                    
+                                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
+                                      <span className="flex items-center gap-1"><FaClock /> {lesson.estimated_time} min</span>
+                                      {lessonProjects.length > 0 && (
+                                        <span className="flex items-center gap-1 text-green-600">
+                                          <FaProjectDiagram /> {lessonProjects.length} mini-project{lessonProjects.length > 1 ? 's' : ''}
+                                        </span>
+                                      )}
+                                      {attachments[lesson.id]?.length > 0 && (
+                                        <span className="flex items-center gap-1 text-purple-600">
+                                          <FaImage /> {attachments[lesson.id].length} images
+                                        </span>
+                                      )}
+                                      {lesson.code_examples && lesson.code_examples.length > 0 && (
+                                        <span className="flex items-center gap-1 text-blue-600">
+                                          <FaCode /> {lesson.code_examples.length} examples
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                  <p className="text-sm text-gray-600 mt-1">{lesson.description?.substring(0, 100)}</p>
                                   
-                                  <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
-                                    <span className="flex items-center gap-1"><FaClock /> {lesson.estimated_time} min</span>
-                                    {miniProjects[lesson.id] && (
-                                      <span className="flex items-center gap-1 text-green-600 cursor-pointer hover:text-green-700" 
-                                            onClick={() => openProjectEditor(lesson.id)}>
-                                        <FaProjectDiagram /> Mini-project
-                                      </span>
-                                    )}
-                                    {attachments[lesson.id]?.length > 0 && (
-                                      <span className="flex items-center gap-1 text-purple-600">
-                                        <FaImage /> {attachments[lesson.id].length} images
-                                      </span>
-                                    )}
-                                    {lesson.code_examples && lesson.code_examples.length > 0 && (
-                                      <span className="flex items-center gap-1 text-blue-600">
-                                        <FaCode /> {lesson.code_examples.length} examples
-                                      </span>
-                                    )}
+                                  <div className="flex gap-1">
+                                    <button 
+                                      onClick={() => openLessonEditor(lesson, module.id)} 
+                                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                      title="Edit Lesson"
+                                    >
+                                      <FaEdit />
+                                    </button>
+                                    <button 
+                                      onClick={() => toggleProjects(lesson.id)} 
+                                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                                      title={lessonProjects.length > 0 ? "Manage Projects" : "Add Projects"}
+                                    >
+                                      <FaProjectDiagram />
+                                      {lessonProjects.length > 0 && (
+                                        <span className="ml-1 text-xs">{lessonProjects.length}</span>
+                                      )}
+                                    </button>
+                                    <button 
+                                      onClick={() => deleteLesson(lesson)} 
+                                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                                      title="Delete Lesson"
+                                    >
+                                      <FaTrash />
+                                    </button>
                                   </div>
                                 </div>
-                                
-                                <div className="flex gap-1">
-                                  <button 
-                                    onClick={() => openLessonEditor(lesson, module.id)} 
-                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                                    title="Edit Lesson"
-                                  >
-                                    <FaEdit />
-                                  </button>
-                                  <button 
-                                    onClick={() => openProjectEditor(lesson.id)} 
-                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                                    title={miniProjects[lesson.id] ? "Edit Mini-Project" : "Add Mini-Project"}
-                                  >
-                                    <FaProjectDiagram />
-                                  </button>
-                                  <button 
-                                    onClick={() => deleteLesson(lesson)} 
-                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                                    title="Delete Lesson"
-                                  >
-                                    <FaTrash />
-                                  </button>
-                                </div>
-                              </div>
 
-                              {attachments[lesson.id]?.length > 0 && (
-                                <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center">
-                                  {attachments[lesson.id].map(att => (
-                                    <div key={att.id} className="relative group">
-                                      <img 
-                                        src={att.url} 
-                                        alt={att.title} 
-                                        className="w-12 h-12 object-cover rounded border cursor-pointer hover:opacity-80"
-                                        onClick={() => window.open(att.url, '_blank')}
-                                      />
+                                {/* Attachments Section */}
+                                {attachments[lesson.id]?.length > 0 && (
+                                  <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center">
+                                    {attachments[lesson.id].map(att => (
+                                      <div key={att.id} className="relative group">
+                                        <img 
+                                          src={att.url} 
+                                          alt={att.title} 
+                                          className="w-12 h-12 object-cover rounded border cursor-pointer hover:opacity-80"
+                                          onClick={() => window.open(att.url, '_blank')}
+                                        />
+                                        <button
+                                          onClick={() => deleteAttachment(att.id, lesson.id)}
+                                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition text-xs"
+                                        >
+                                          <FaTimes size={8} />
+                                        </button>
+                                      </div>
+                                    ))}
+                                    <button
+                                      onClick={() => {
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = 'image/*,application/pdf';
+                                        input.multiple = true;
+                                        input.onchange = (e) => handleImageUpload(e.target.files, lesson.id);
+                                        input.click();
+                                      }}
+                                      disabled={uploadingImage}
+                                      className="w-12 h-12 border-2 border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 hover:text-primary-500 hover:border-primary-500 transition disabled:opacity-50"
+                                      title="Add files (images or PDFs)"
+                                    >
+                                      {uploadingImage ? <FaSpinner className="animate-spin" /> : <FaUpload />}
+                                    </button>
+                                  </div>
+                                )}
+                                
+                                {(!attachments[lesson.id] || attachments[lesson.id].length === 0) && (
+                                  <div className="mt-3 pt-3 border-t">
+                                    <button
+                                      onClick={() => {
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = 'image/*,application/pdf';
+                                        input.multiple = true;
+                                        input.onchange = (e) => handleImageUpload(e.target.files, lesson.id);
+                                        input.click();
+                                      }}
+                                      disabled={uploadingImage}
+                                      className="text-xs text-gray-400 hover:text-primary-500 flex items-center gap-1 disabled:opacity-50"
+                                    >
+                                      {uploadingImage ? <><FaSpinner className="animate-spin" size={10} /> Uploading...</> : <><FaUpload size={10} /> Add images / PDFs</>}
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Mini Projects Section */}
+                                {expandedProjects[lesson.id] && (
+                                  <div className="mt-4 pt-3 border-t">
+                                    <div className="flex justify-between items-center mb-3">
+                                      <h4 className="font-medium text-gray-700 flex items-center gap-2">
+                                        <FaProjectDiagram className="text-green-600" />
+                                        Mini-Projects ({lessonProjects.length})
+                                      </h4>
                                       <button
-                                        onClick={() => deleteAttachment(att.id, lesson.id)}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition text-xs"
+                                        onClick={() => openProjectEditor(lesson.id)}
+                                        className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 flex items-center gap-1"
                                       >
-                                        <FaTimes size={8} />
+                                        <FaPlus size={10} /> Add Project
                                       </button>
                                     </div>
-                                  ))}
-                                  <button
-                                    onClick={() => {
-                                      const input = document.createElement('input');
-                                      input.type = 'file';
-                                      input.accept = 'image/*,application/pdf';
-                                      input.multiple = true;
-                                      input.onchange = (e) => handleImageUpload(e.target.files, lesson.id);
-                                      input.click();
-                                    }}
-                                    disabled={uploadingImage}
-                                    className="w-12 h-12 border-2 border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 hover:text-primary-500 hover:border-primary-500 transition disabled:opacity-50"
-                                    title="Add files (images or PDFs)"
-                                  >
-                                    {uploadingImage ? <FaSpinner className="animate-spin" /> : <FaUpload />}
-                                  </button>
-                                </div>
-                              )}
-                              
-                              {(!attachments[lesson.id] || attachments[lesson.id].length === 0) && (
-                                <div className="mt-3 pt-3 border-t">
-                                  <button
-                                    onClick={() => {
-                                      const input = document.createElement('input');
-                                      input.type = 'file';
-                                      input.accept = 'image/*,application/pdf';
-                                      input.multiple = true;
-                                      input.onchange = (e) => handleImageUpload(e.target.files, lesson.id);
-                                      input.click();
-                                    }}
-                                    disabled={uploadingImage}
-                                    className="text-xs text-gray-400 hover:text-primary-500 flex items-center gap-1 disabled:opacity-50"
-                                  >
-                                    {uploadingImage ? <><FaSpinner className="animate-spin" size={10} /> Uploading...</> : <><FaUpload size={10} /> Add images / PDFs</>}
-                                  </button>
-                                </div>
-                              )}
+                                    
+                                    {lessonProjects.length === 0 && (
+                                      <div className="text-center py-4 bg-gray-50 rounded-lg border">
+                                        <p className="text-gray-500 text-sm">No mini-projects yet. Add one to challenge your students!</p>
+                                      </div>
+                                    )}
+                                    
+                                    <div className="space-y-2">
+                                      {lessonProjects.map((project, pIdx) => (
+                                        <div key={project.id} className="bg-green-50 rounded-lg p-3 border border-green-200">
+                                          <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-gray-500 text-xs">#{pIdx + 1}</span>
+                                                <span className="font-medium text-green-800">{project.title}</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                                  project.difficulty === 'beginner' ? 'bg-green-200 text-green-700' :
+                                                  project.difficulty === 'intermediate' ? 'bg-yellow-200 text-yellow-700' :
+                                                  'bg-red-200 text-red-700'
+                                                }`}>
+                                                  {project.difficulty}
+                                                </span>
+                                                <span className="text-xs text-gray-500 flex items-center gap-1">
+                                                  <FaClock /> {project.estimated_time} min
+                                                </span>
+                                              </div>
+                                              <p className="text-sm text-gray-600 mt-1">{project.description?.substring(0, 80)}</p>
+                                            </div>
+                                            <div className="flex gap-1 ml-2">
+                                              <button
+                                                onClick={() => moveProject(lesson.id, project.id, 'up')}
+                                                className="p-1 text-gray-500 hover:bg-green-100 rounded"
+                                                disabled={pIdx === 0}
+                                                title="Move Up"
+                                              >
+                                                <FaChevronUp size={12} />
+                                              </button>
+                                              <button
+                                                onClick={() => moveProject(lesson.id, project.id, 'down')}
+                                                className="p-1 text-gray-500 hover:bg-green-100 rounded"
+                                                disabled={pIdx === lessonProjects.length - 1}
+                                                title="Move Down"
+                                              >
+                                                <FaChevronDown size={12} />
+                                              </button>
+                                              <button
+                                                onClick={() => openProjectEditor(lesson.id, project)}
+                                                className="p-1 text-blue-600 hover:bg-green-100 rounded"
+                                                title="Edit Project"
+                                              >
+                                                <FaEdit size={12} />
+                                              </button>
+                                              <button
+                                                onClick={() => deleteProject(project.id, lesson.id)}
+                                                className="p-1 text-red-600 hover:bg-green-100 rounded"
+                                                title="Delete Project"
+                                              >
+                                                <FaTrash size={12} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {lessonProjects.length > 0 && !expandedProjects[lesson.id] && (
+                                  <div className="mt-2">
+                                    <button
+                                      onClick={() => toggleProjects(lesson.id)}
+                                      className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
+                                    >
+                                      <FaProjectDiagram /> Show {lessonProjects.length} mini-project{lessonProjects.length > 1 ? 's' : ''} ▼
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -1128,7 +1263,7 @@ const AdminCurriculum = () => {
         )}
       </div>
 
-      {/* MODULE MODAL */}
+      {/* MODULE MODAL (same as before) */}
       {showModuleModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-auto">
@@ -1229,7 +1364,7 @@ const AdminCurriculum = () => {
         </div>
       )}
 
-      {/* LESSON MODAL */}
+      {/* LESSON MODAL (same as before) */}
       {showLessonModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-auto">
@@ -1438,7 +1573,7 @@ const AdminCurriculum = () => {
             <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <FaProjectDiagram className="text-green-600" />
-                {editingProject ? 'Edit Mini-Project' : 'Add Mini-Project'}
+                {editingProject ? 'Edit Mini-Project' : 'Add New Mini-Project'}
               </h2>
               <button onClick={() => setShowProjectModal(false)} className="text-gray-500 hover:text-gray-700">
                 <FaTimes />
@@ -1462,7 +1597,7 @@ const AdminCurriculum = () => {
                 className="w-full px-3 py-2 border rounded-lg"
               />
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
                   <select
@@ -1476,7 +1611,7 @@ const AdminCurriculum = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Time (minutes)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Est. Time (min)</label>
                   <input
                     type="number"
                     value={projectForm.estimated_time}
@@ -1484,6 +1619,16 @@ const AdminCurriculum = () => {
                     className="w-full px-3 py-2 border rounded-lg"
                     min="10"
                     max="240"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                  <input
+                    type="number"
+                    value={projectForm.order_number}
+                    onChange={e => setProjectForm({...projectForm, order_number: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    min="0"
                   />
                 </div>
               </div>
@@ -1528,6 +1673,17 @@ const AdminCurriculum = () => {
                   onChange={e => setProjectForm({...projectForm, expected_output: e.target.value})}
                   className="w-full px-3 py-2 border rounded-lg font-mono text-sm"
                   placeholder="What the program should output when run correctly"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Output Image URL (Optional)</label>
+                <input
+                  type="text"
+                  value={projectForm.output_image_url}
+                  onChange={e => setProjectForm({...projectForm, output_image_url: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="https://example.com/output-screenshot.png"
                 />
               </div>
               

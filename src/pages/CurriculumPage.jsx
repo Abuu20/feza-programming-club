@@ -6,9 +6,6 @@ import Loader from '../components/common/Loader';
 import { achievementsService } from '../services/achievements';
 import toast from 'react-hot-toast';
 import { FaCheck, FaClock, FaProjectDiagram, FaImage, FaCode, FaGraduationCap, FaChevronRight, FaLock, FaHeart, FaSpinner } from 'react-icons/fa';
-
-// Direct import — lazy() + Suspense causes the component to remount on
-// tab-switch, resetting all internal state (code editor, output, etc.)
 import LessonViewer from '../components/curriculum/LessonViewer';
 
 const CurriculumPage = () => {
@@ -25,14 +22,11 @@ const CurriculumPage = () => {
   const [expandedModules, setExpandedModules] = useState({});
   const [isLoadingLesson, setIsLoadingLesson] = useState(false);
 
-  // Track whether curriculum data has already been fetched so tab
-  // switches (which create a new `user` object reference via auth token
-  // refresh) don't re-trigger the heavy fetch and wipe selectedLesson.
   const curriculumFetchedRef = useRef(false);
 
-  // ── Effect 1: fetch modules + lessons + attachments ONCE ────────────
+  // Effect 1: fetch modules + lessons + attachments ONCE
   useEffect(() => {
-    if (curriculumFetchedRef.current) return; // already loaded
+    if (curriculumFetchedRef.current) return;
     curriculumFetchedRef.current = true;
 
     const fetchModules = async () => {
@@ -67,6 +61,7 @@ const CurriculumPage = () => {
 
           const lessonIds = lessonsData?.map(l => l.id) || [];
           if (lessonIds.length > 0) {
+            // Fetch attachments with minimal data for list view
             const { data: attachmentsData } = await supabase
               .from('lesson_attachments')
               .select('lesson_id, id, type, is_motivational')
@@ -81,15 +76,18 @@ const CurriculumPage = () => {
               setAttachments(attachmentsMap);
             }
 
+            // Fetch projects count for list view
             const { data: projectsData } = await supabase
               .from('mini_projects')
-              .select('lesson_id, id, title')
-              .in('lesson_id', lessonIds);
+              .select('lesson_id, id, title, difficulty, estimated_time')
+              .in('lesson_id', lessonIds)
+              .order('order_number', { ascending: true });
 
             if (projectsData) {
               const projectsMap = {};
               projectsData.forEach(proj => {
-                projectsMap[proj.lesson_id] = proj;
+                if (!projectsMap[proj.lesson_id]) projectsMap[proj.lesson_id] = [];
+                projectsMap[proj.lesson_id].push(proj);
               });
               setMiniProjects(projectsMap);
             }
@@ -104,11 +102,9 @@ const CurriculumPage = () => {
     };
 
     fetchModules();
-  }, []); // ← no dependency on `user` — curriculum data never changes per session
+  }, []);
 
-  // ── Effect 2: fetch user progress separately, keyed only on user ID ─
-  // Using user?.id (a primitive) means a new `user` object reference from
-  // a token refresh will NOT re-run this effect unless the actual ID changes.
+  // Effect 2: fetch user progress separately
   useEffect(() => {
     if (!user?.id) return;
 
@@ -128,13 +124,14 @@ const CurriculumPage = () => {
     };
 
     fetchProgress();
-  }, [user?.id]); // ← only re-runs if the actual user ID changes (login/logout)
+  }, [user?.id]);
 
   const loadFullLesson = async (lessonId) => {
     setIsLoadingLesson(true);
     try {
       toast.loading('Loading lesson content...', { id: 'loading-lesson' });
 
+      // Fetch full lesson data
       const { data: lessonData, error: lessonError } = await supabase
         .from('curriculum')
         .select('*')
@@ -143,17 +140,19 @@ const CurriculumPage = () => {
 
       if (lessonError) throw lessonError;
 
+      // Fetch all attachments for this lesson
       const { data: attachmentsData } = await supabase
         .from('lesson_attachments')
         .select('*')
         .eq('lesson_id', lessonId)
         .order('display_order', { ascending: true });
 
-      const { data: projectData } = await supabase
+      // Fetch ALL mini-projects for this lesson (multiple projects supported)
+      const { data: projectsData } = await supabase
         .from('mini_projects')
         .select('*')
         .eq('lesson_id', lessonId)
-        .maybeSingle();
+        .order('order_number', { ascending: true });
 
       toast.dismiss('loading-lesson');
       toast.success('Lesson ready!');
@@ -161,7 +160,7 @@ const CurriculumPage = () => {
       return {
         lesson: lessonData,
         attachments: attachmentsData || [],
-        miniProject: projectData
+        miniProjects: projectsData || [] // Now returns an array of projects
       };
     } catch (error) {
       console.error('Error loading lesson:', error);
@@ -247,7 +246,6 @@ const CurriculumPage = () => {
     }));
   };
 
-  // Show loading skeleton
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -296,7 +294,7 @@ const CurriculumPage = () => {
           lesson={selectedLessonData.lesson}
           module={selectedModule}
           attachments={selectedLessonData.attachments}
-          miniProject={selectedLessonData.miniProject}
+          miniProjects={selectedLessonData.miniProjects}
           isCompleted={progress[selectedLesson.id] === 'completed'}
           onComplete={() => updateProgress(selectedLesson.id, 'completed')}
           onBack={() => {
@@ -373,7 +371,8 @@ const CurriculumPage = () => {
                   {moduleLessons.map((lesson, lessonIdx) => {
                     const status = getLessonStatus(lesson.id);
                     const unlocked = isLessonUnlocked(lesson, moduleLessons);
-                    const hasProject = !!miniProjects[lesson.id];
+                    const lessonProjects = miniProjects[lesson.id] || [];
+                    const hasProjects = lessonProjects.length > 0;
                     const hasImages = attachments[lesson.id]?.length > 0;
                     const hasMotivational = attachments[lesson.id]?.some(att => att.is_motivational) || false;
 
@@ -399,9 +398,9 @@ const CurriculumPage = () => {
                               {status === 'in-progress' && (
                                 <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">In Progress</span>
                               )}
-                              {hasProject && (
+                              {hasProjects && (
                                 <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded flex items-center gap-1">
-                                  <FaProjectDiagram size={10} /> Project
+                                  <FaProjectDiagram size={10} /> {lessonProjects.length} Project{lessonProjects.length > 1 ? 's' : ''}
                                 </span>
                               )}
                               {hasImages && (

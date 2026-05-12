@@ -1,4 +1,3 @@
-//src/pages/ChatPage.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -51,7 +50,7 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, members
   });
 
   return (
-    <div className={`group flex gap-3 px-4 py-1.5 hover:bg-gray-50 transition-colors`}>
+    <div className={`group flex gap-3 px-3 md:px-4 py-1.5 hover:bg-gray-50 transition-colors`}>
       <div className="flex-shrink-0 mt-0.5">
         <Avatar name={msg.display_name} url={msg.avatar_url} size={9} />
       </div>
@@ -159,6 +158,7 @@ const ChatPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMembers, setShowMembers] = useState(false);
   const [showNewChannel, setShowNewChannel] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [onlineUsers] = useState(new Set());
@@ -406,10 +406,21 @@ const ChatPage = () => {
   }).filter(Boolean);
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-gray-100 overflow-hidden">
+    <div className="relative flex h-[calc(100vh-64px)] bg-gray-100 overflow-hidden">
+
+      {/* ── Mobile sidebar overlay backdrop ──────────────── */}
+      {showSidebar && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+          onClick={() => setShowSidebar(false)} />
+      )}
 
       {/* ── Sidebar ───────────────────────────────────────── */}
-      <div className="w-64 flex-shrink-0 bg-gray-900 text-gray-300 flex flex-col">
+      <div className={`
+        fixed md:relative inset-y-0 left-0 z-40
+        w-64 flex-shrink-0 bg-gray-900 text-gray-300 flex flex-col
+        transform transition-transform duration-200
+        ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
         <div className="p-4 border-b border-gray-700">
           <h2 className="font-bold text-white text-lg flex items-center gap-2">
             <FaCommentDots className="text-green-400" /> Club Chat
@@ -431,7 +442,7 @@ const ChatPage = () => {
             </div>
             {channels.map(ch => (
               <button key={ch.id}
-                onClick={() => { setActiveChannel(ch); setActiveDM(null); }}
+                onClick={() => { setActiveChannel(ch); setActiveDM(null); setShowSidebar(false); }}
                 className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 text-sm transition
                   ${activeChannel?.id === ch.id && !activeDM
                     ? 'bg-gray-600 text-white'
@@ -454,7 +465,7 @@ const ChatPage = () => {
               </div>
               {myDMs.map(dm => (
                 <button key={dm.thread_id}
-                  onClick={() => { setActiveDM(dm); setActiveChannel(null); }}
+                  onClick={() => { setActiveDM(dm); setActiveChannel(null); setShowSidebar(false); }}
                   className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 text-sm transition
                     ${activeDM?.thread_id === dm.thread_id
                       ? 'bg-gray-600 text-white'
@@ -496,19 +507,28 @@ const ChatPage = () => {
       <div className="flex-1 flex flex-col bg-white overflow-hidden">
 
         {/* Header */}
-        <div className="px-6 py-3 border-b flex items-center justify-between bg-white shadow-sm">
-          <div>
-            <h3 className="font-bold text-gray-900 flex items-center gap-2">
-              {activeDM
-                ? <><Avatar name={activeDM.other_user.name} url={activeDM.other_user.photo_url} size={6} /> {chatTitle}</>
-                : <><FaHashtag className="text-gray-400" />{activeChannel?.name}</>
-              }
-            </h3>
-            <p className="text-xs text-gray-500">{chatDesc}</p>
+        <div className="px-3 md:px-6 py-3 border-b flex items-center justify-between bg-white shadow-sm">
+          <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            <button onClick={() => setShowSidebar(true)}
+              className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 flex flex-col gap-1">
+              <span className="block w-5 h-0.5 bg-gray-600" />
+              <span className="block w-5 h-0.5 bg-gray-600" />
+              <span className="block w-5 h-0.5 bg-gray-600" />
+            </button>
+            <div>
+              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm md:text-base">
+                {activeDM
+                  ? <><Avatar name={activeDM.other_user.name} url={activeDM.other_user.photo_url} size={6} /> {chatTitle}</>
+                  : <><FaHashtag className="text-gray-400" />{activeChannel?.name}</>
+                }
+              </h3>
+              <p className="text-xs text-gray-500 hidden md:block">{chatDesc}</p>
+            </div>
           </div>
           <button onClick={() => setShowMembers(!showMembers)}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition">
-            <FaUsers /> Members ({members.length})
+            className="flex items-center gap-1 md:gap-2 text-sm text-gray-500 hover:text-gray-700 transition">
+            <FaUsers /> <span className="hidden md:inline">Members</span> ({members.length})
           </button>
         </div>
 
@@ -553,7 +573,7 @@ const ChatPage = () => {
 
         {/* Reply preview */}
         {replyTo && (
-          <div className="mx-4 px-3 py-2 bg-blue-50 border-l-4 border-blue-400 rounded flex items-center justify-between">
+          <div className="mx-2 md:mx-4 px-3 py-2 bg-blue-50 border-l-4 border-blue-400 rounded flex items-center justify-between">
             <div className="text-sm text-blue-700 truncate">
               <span className="font-semibold">Replying to {replyTo.display_name}:</span>{' '}
               {(replyTo.content || replyTo.code_snippet || '📷 Image').slice(0, 80)}
@@ -565,7 +585,7 @@ const ChatPage = () => {
         )}
 
         {/* Input area */}
-        <div className="px-4 pb-4 pt-2">
+        <div className="px-2 md:px-4 pb-3 md:pb-4 pt-2">
           {codeMode && (
             <div className="mb-1 flex items-center gap-2">
               <span className="text-xs text-gray-500 font-mono">Python code mode</span>
@@ -628,7 +648,7 @@ const ChatPage = () => {
 
       {/* ── Members panel ─────────────────────────────────── */}
       {showMembers && (
-        <div className="w-60 flex-shrink-0 bg-white border-l flex flex-col">
+        <div className="fixed md:relative inset-0 md:inset-auto z-30 md:z-auto md:w-60 md:flex-shrink-0 bg-white md:border-l flex flex-col">
           <div className="p-4 border-b flex items-center justify-between">
             <h4 className="font-semibold text-gray-800">Members</h4>
             <button onClick={() => setShowMembers(false)} className="text-gray-400 hover:text-gray-600">

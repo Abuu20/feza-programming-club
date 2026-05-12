@@ -12,6 +12,7 @@ import {
   UserIcon,
   ArrowRightOnRectangleIcon,
   UserPlusIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
 import { FaBookOpen, FaTrophy } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
@@ -32,6 +33,7 @@ const Navbar = () => {
   const navLinks = [
     { path: '/', icon: HomeIcon, label: 'Home' },
     { path: '/activities', icon: CalendarIcon, label: 'Activities' },
+    { path: '/chat', icon: ChatBubbleLeftRightIcon, label: 'Chat' },  
     { path: '/members', icon: UserGroupIcon, label: 'Members' },
     { path: '/gallery', icon: PhotoIcon, label: 'Gallery' },
     { path: '/announcements', icon: BellIcon, label: 'News' },

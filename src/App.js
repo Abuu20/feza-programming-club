@@ -24,6 +24,7 @@ import AchievementsPage from './pages/AchievementsPage';
 import ResetPassword from './pages/ResetPassword';
 import UpdatePassword from './pages/UpdatePassword';
 import WelcomeModal from './components/common/WelcomeModal';
+import ChatPage from './pages/ChatPage';
 
 
 // Student Pages
@@ -63,6 +64,7 @@ function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/activities" element={<ActivitiesPage />} />
               <Route path="/activities/:id" element={<ActivityDetailPage />} />
+              <Route path="/chat" element={<ChatPage />} />
               <Route path="/members" element={<MembersPage />} />
               <Route path="/gallery" element={<GalleryPage />} />
               <Route path="/contact" element={<ContactPage />} />

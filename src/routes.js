@@ -14,6 +14,7 @@ import ContactPage from './pages/ContactPage';
 import PythonPracticePage from './pages/PythonPracticePage';
 import LoginPage from './pages/auth/LoginPage';
 import LogoutPage from './pages/auth/LogoutPage';
+import ChatPage from './pages/ChatPage';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -30,6 +31,7 @@ function AppRoutes() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/activities" element={<ActivitiesPage />} />
+        <Route path="/chat" element={<ChatPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/members" element={<MembersPage />} />
         <Route path="/gallery" element={<GalleryPage />} />

@@ -8,6 +8,26 @@ import {
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
+// ── Browser notifications ────────────────────────────────────
+const requestNotificationPermission = async () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+};
+
+const sendNotification = (title, body, icon) => {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const n = new Notification(title, {
+      body,
+      icon: icon || '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: 'feza-chat', // replaces previous notification instead of stacking
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+    setTimeout(() => n.close(), 5000);
+  }
+};
+
 // ── Emoji picker (simple inline) ─────────────────────────────
 const QUICK_EMOJIS = ['👍','❤️','😂','🔥','🎉','👀','✅','💯','🐍','🚀'];
 
@@ -20,15 +40,22 @@ const highlight = (code) => code
   .replace(/(".*?"|'.*?')/g, '<span style="color:#CE9178">$1</span>')
   .replace(/\b(\d+)\b/g, '<span style="color:#B5CEA8">$1</span>');
 
-// ── Avatar helper ─────────────────────────────────────────────
+// ── Avatar helper — uses px sizing to avoid Tailwind JIT cache misses ──────
 const Avatar = ({ name, url, size = 8 }) => {
+  const px = size * 4; // Tailwind unit → px (1 unit = 4px)
   const initials = name?.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() || '?';
   const colors = ['#002B5C','#0ea5e9','#8b5cf6','#10b981','#f59e0b','#ef4444'];
   const color = colors[name?.charCodeAt(0) % colors.length] || colors[0];
-  if (url) return <img src={url} alt={name} className={`w-${size} h-${size} rounded-full object-cover flex-shrink-0`} />;
+  const style = { width: px, height: px, minWidth: px, minHeight: px };
+  if (url) return (
+    <img src={url} alt={name}
+      style={style}
+      className="rounded-full object-cover flex-shrink-0" />
+  );
   return (
-    <div className={`w-${size} h-${size} rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-bold`}
-      style={{ background: color }}>
+    <div
+      className="rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold"
+      style={{ ...style, background: color, fontSize: Math.max(px * 0.35, 10) }}>
       {initials}
     </div>
   );
@@ -52,7 +79,7 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, members
   return (
     <div className={`group flex gap-3 px-3 md:px-4 py-1.5 hover:bg-gray-50 transition-colors`}>
       <div className="flex-shrink-0 mt-0.5">
-        <Avatar name={msg.display_name} url={msg.avatar_url} size={9} />
+        <Avatar name={msg.display_name} url={msg.avatar_url} size={7} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 mb-0.5">
@@ -174,6 +201,7 @@ const ChatPage = () => {
 
   // ── Load channels ──────────────────────────────────────────
   useEffect(() => {
+    requestNotificationPermission();
     const load = async () => {
       const { data } = await supabase.from('chat_channels').select('*').order('created_at');
       setChannels(data || []);
@@ -246,6 +274,25 @@ const ChatPage = () => {
             if (data) {
               setMessages(prev => [...prev, data]);
               setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+
+              // In-app toast when message arrives in a channel you're NOT viewing
+              if (data.user_id !== user?.id && !document.hidden && activeDM?.thread_id !== dmThreadId && activeChannel?.id !== channelId) {
+                toast(`💬 ${data.display_name}: ${(data.content || '').slice(0, 60) || 'New message'}`, { duration: 3000 });
+              }
+              // Browser notification when tab is hidden
+              if (data.user_id !== user?.id && document.hidden) {
+                const where = activeDM
+                  ? `DM from ${data.display_name}`
+                  : `#${activeChannel?.name}`;
+                const preview = data.content
+                  || (data.image_url ? '📷 Shared an image' : '')
+                  || (data.code_snippet ? '💻 Shared code' : '');
+                sendNotification(
+                  `${data.display_name} — ${where}`,
+                  preview || 'New message',
+                  data.avatar_url
+                );
+              }
             }
           });
       })

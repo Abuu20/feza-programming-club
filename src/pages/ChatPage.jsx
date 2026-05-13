@@ -189,15 +189,78 @@ const ChatPage = () => {
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [onlineUsers] = useState(new Set());
+  const [unreadCounts, setUnreadCounts] = useState({}); // { channelId/dmThreadId: count }
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
   const textRef = useRef(null);
   const realtimeRef = useRef(null);
+  const globalRealtimeRef = useRef(null); // listens to ALL channels for notifications+unread
 
   // Profile info
   const myProfile = members.find(m => m.user_id === user?.id);
   const displayName = myProfile?.name || user?.email?.split('@')[0] || 'Guest';
   const avatarUrl = myProfile?.photo_url || null;
+
+  // Broadcast total unread to Navbar via CustomEvent
+  const dispatchUnread = (counts, removingKey = null) => {
+    const updated = removingKey ? Object.fromEntries(Object.entries(counts).filter(([k]) => k !== removingKey)) : counts;
+    const total = Object.values(updated).reduce((a, b) => a + b, 0);
+    window.dispatchEvent(new CustomEvent('feza-chat-unread', { detail: { total } }));
+  };
+
+  // ── Global realtime — listens to ALL new messages for notifications + unread badges
+  useEffect(() => {
+    if (globalRealtimeRef.current) supabase.removeChannel(globalRealtimeRef.current);
+    globalRealtimeRef.current = supabase
+      .channel('chat-global-notifications')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'chat_messages'
+      }, (payload) => {
+        const msg = payload.new;
+        if (msg.user_id === user?.id) return; // ignore own messages
+
+        const isActiveChannel = !activeDM && activeChannel?.id === msg.channel_id;
+        const isActiveDM = activeDM && activeDM.thread_id === msg.dm_thread_id;
+        const isCurrentView = isActiveChannel || isActiveDM;
+        const key = msg.dm_thread_id || msg.channel_id;
+
+        // Increment unread badge for the channel/DM
+        if (!isCurrentView) {
+          setUnreadCounts(prev => {
+            const updated = { ...prev, [key]: (prev[key] || 0) + 1 };
+            // broadcast to navbar
+            const total = Object.values(updated).reduce((a, b) => a + b, 0);
+            window.dispatchEvent(new CustomEvent('feza-chat-unread', { detail: { total } }));
+            return updated;
+          });
+        }
+
+        // Browser notification when tab is hidden
+        if (document.hidden) {
+          const preview = msg.content
+            || (msg.image_url ? '📷 Shared an image' : '')
+            || (msg.code_snippet ? '💻 Shared code' : '')
+            || 'New message';
+          const channelName = channels.find(c => c.id === msg.channel_id)?.name;
+          const where = msg.dm_thread_id ? 'Direct Message' : `#${channelName || 'chat'}`;
+          sendNotification(
+            `${msg.display_name} — ${where}`,
+            preview,
+            msg.avatar_url
+          );
+        } else if (!isCurrentView) {
+          // In-app toast when tab is visible but user is in different channel
+          const preview = (msg.content || '').slice(0, 60) || '📷 Image';
+          toast(`💬 ${msg.display_name}: ${preview}`, {
+            duration: 4000,
+            style: { cursor: 'pointer' },
+          });
+        }
+      })
+      .subscribe();
+
+    return () => { if (globalRealtimeRef.current) supabase.removeChannel(globalRealtimeRef.current); };
+  }, [user?.id, activeChannel?.id, activeDM?.thread_id, channels]);
 
   // ── Load channels ──────────────────────────────────────────
   useEffect(() => {
@@ -275,24 +338,7 @@ const ChatPage = () => {
               setMessages(prev => [...prev, data]);
               setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
 
-              // In-app toast when message arrives in a channel you're NOT viewing
-              if (data.user_id !== user?.id && !document.hidden && activeDM?.thread_id !== dmThreadId && activeChannel?.id !== channelId) {
-                toast(`💬 ${data.display_name}: ${(data.content || '').slice(0, 60) || 'New message'}`, { duration: 3000 });
-              }
-              // Browser notification when tab is hidden
-              if (data.user_id !== user?.id && document.hidden) {
-                const where = activeDM
-                  ? `DM from ${data.display_name}`
-                  : `#${activeChannel?.name}`;
-                const preview = data.content
-                  || (data.image_url ? '📷 Shared an image' : '')
-                  || (data.code_snippet ? '💻 Shared code' : '');
-                sendNotification(
-                  `${data.display_name} — ${where}`,
-                  preview || 'New message',
-                  data.avatar_url
-                );
-              }
+              // notifications handled by global subscription above
             }
           });
       })
@@ -489,13 +535,18 @@ const ChatPage = () => {
             </div>
             {channels.map(ch => (
               <button key={ch.id}
-                onClick={() => { setActiveChannel(ch); setActiveDM(null); setShowSidebar(false); }}
+                onClick={() => { setActiveChannel(ch); setActiveDM(null); setShowSidebar(false); setUnreadCounts(prev => { const n = {...prev}; delete n[ch.id]; return n; }); dispatchUnread(unreadCounts, ch.id); }}
                 className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 text-sm transition
                   ${activeChannel?.id === ch.id && !activeDM
                     ? 'bg-gray-600 text-white'
                     : 'hover:bg-gray-700 text-gray-400 hover:text-white'}`}>
                 <FaHashtag size={12} className="flex-shrink-0" />
-                <span className="truncate">{ch.name}</span>
+                <span className="truncate flex-1">{ch.name}</span>
+                {unreadCounts[ch.id] > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {unreadCounts[ch.id] > 99 ? '99+' : unreadCounts[ch.id]}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -512,13 +563,18 @@ const ChatPage = () => {
               </div>
               {myDMs.map(dm => (
                 <button key={dm.thread_id}
-                  onClick={() => { setActiveDM(dm); setActiveChannel(null); setShowSidebar(false); }}
+                  onClick={() => { setActiveDM(dm); setActiveChannel(null); setShowSidebar(false); setUnreadCounts(prev => { const n = {...prev}; delete n[dm.thread_id]; return n; }); dispatchUnread(unreadCounts, dm.thread_id); }}
                   className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 text-sm transition
                     ${activeDM?.thread_id === dm.thread_id
                       ? 'bg-gray-600 text-white'
                       : 'hover:bg-gray-700 text-gray-400 hover:text-white'}`}>
                   <Avatar name={dm.other_user.name} url={dm.other_user.photo_url} size={5} />
-                  <span className="truncate">{dm.other_user.name}</span>
+                  <span className="truncate flex-1">{dm.other_user.name}</span>
+                  {unreadCounts[dm.thread_id] > 0 && (
+                    <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                      {unreadCounts[dm.thread_id] > 99 ? '99+' : unreadCounts[dm.thread_id]}
+                    </span>
+                  )}
                 </button>
               ))}
               {myDMs.length === 0 && (

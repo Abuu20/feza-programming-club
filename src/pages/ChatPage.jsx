@@ -62,107 +62,180 @@ const Avatar = ({ name, url, size = 8 }) => {
 };
 
 // ── Message bubble ────────────────────────────────────────────
-const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, members }) => {
+const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete }) => {
   const [showEmoji, setShowEmoji] = useState(false);
   const isOwn = msg.user_id === currentUserId;
+
   if (msg.is_deleted) return (
-    <div className="px-4 py-1 text-xs text-gray-400 italic">Message deleted</div>
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} px-3 md:px-4 py-0.5`}>
+      <span className="text-xs text-gray-400 italic bg-gray-100 px-3 py-1 rounded-full">
+        Message deleted
+      </span>
+    </div>
   );
 
   // Group reactions
   const reactionMap = {};
   (msg.reactions || []).forEach(r => {
-    reactionMap[r.emoji] = (reactionMap[r.emoji] || []);
+    reactionMap[r.emoji] = reactionMap[r.emoji] || [];
     reactionMap[r.emoji].push(r.user_id);
   });
 
-  return (
-    <div className={`group flex gap-3 px-3 md:px-4 py-1.5 hover:bg-gray-50 transition-colors`}>
-      <div className="flex-shrink-0 mt-0.5">
-        <Avatar name={msg.display_name} url={msg.avatar_url} size={7} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2 mb-0.5">
-          <span className="font-semibold text-sm text-gray-900">{msg.display_name}</span>
-          <span className="text-xs text-gray-400">
-            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
+  const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+  // ── Own messages: bubble on the right, no avatar/name ────────
+  if (isOwn) {
+    return (
+      <div className="group flex flex-col items-end px-3 md:px-4 py-0.5">
         {/* Reply preview */}
         {msg.reply_to_id && msg.reply_preview && (
-          <div className="border-l-2 border-gray-300 pl-2 mb-1 text-xs text-gray-500 truncate">
+          <div className="max-w-xs md:max-w-md border-l-2 border-primary-300 pl-2 mb-1 text-xs text-gray-500 truncate self-end">
             ↩ {msg.reply_preview}
           </div>
         )}
 
-        {/* Text content */}
-        {msg.content && (
-          <p className="text-sm text-gray-800 break-words whitespace-pre-wrap">{msg.content}</p>
-        )}
-
-        {/* Image */}
-        {msg.image_url && (
-          <img src={msg.image_url} alt="shared"
-            className="mt-1 max-w-xs rounded-lg border cursor-pointer hover:opacity-90"
-            onClick={() => window.open(msg.image_url, '_blank')} />
-        )}
-
-        {/* Code snippet */}
-        {msg.code_snippet && (
-          <div className="mt-1 rounded-lg overflow-hidden border border-gray-200">
-            <div className="bg-gray-800 px-3 py-1 flex items-center justify-between">
-              <span className="text-xs text-gray-400">{msg.code_language || 'python'}</span>
-              <button onClick={() => { navigator.clipboard.writeText(msg.code_snippet); toast.success('Copied!'); }}
-                className="text-xs text-gray-400 hover:text-white">copy</button>
+        <div className="flex items-end gap-2 max-w-xs md:max-w-md lg:max-w-lg">
+          {/* Hover actions */}
+          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+            <div className="relative">
+              <button onClick={() => setShowEmoji(!showEmoji)}
+                className="p-1 rounded hover:bg-gray-200 text-gray-400">
+                <FaSmile size={12} />
+              </button>
+              {showEmoji && (
+                <div className="absolute right-0 bottom-8 bg-white border rounded-xl shadow-lg p-2 flex gap-1 z-20">
+                  {QUICK_EMOJIS.map(e => (
+                    <button key={e} onClick={() => { onReact(msg.id, e); setShowEmoji(false); }}
+                      className="hover:scale-125 transition-transform text-lg">{e}</button>
+                  ))}
+                </div>
+              )}
             </div>
-            <pre className="bg-gray-900 text-gray-100 text-xs p-3 overflow-x-auto"
-              dangerouslySetInnerHTML={{ __html: highlight(msg.code_snippet) }} />
+            <button onClick={() => onReply(msg)} className="p-1 rounded hover:bg-gray-200 text-gray-400">
+              <FaReply size={12} />
+            </button>
+            <button onClick={() => onDelete(msg.id)} className="p-1 rounded hover:bg-red-100 text-red-400">
+              <FaTrash size={12} />
+            </button>
           </div>
-        )}
+
+          {/* Bubble */}
+          <div className="flex flex-col items-end">
+            {msg.content && (
+              <div className="bg-primary-600 text-white px-4 py-2 rounded-2xl rounded-br-sm text-sm break-words whitespace-pre-wrap shadow-sm">
+                {msg.content}
+              </div>
+            )}
+            {msg.image_url && (
+              <img src={msg.image_url} alt="shared"
+                className="max-w-xs rounded-2xl rounded-br-sm border-2 border-primary-200 cursor-pointer hover:opacity-90 shadow-sm"
+                onClick={() => window.open(msg.image_url, '_blank')} />
+            )}
+            {msg.code_snippet && (
+              <div className="rounded-2xl rounded-br-sm overflow-hidden border border-gray-700 shadow-sm w-full">
+                <div className="bg-gray-800 px-3 py-1 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{msg.code_language || 'python'}</span>
+                  <button onClick={() => { navigator.clipboard.writeText(msg.code_snippet); toast.success('Copied!'); }}
+                    className="text-xs text-gray-400 hover:text-white">copy</button>
+                </div>
+                <pre className="bg-gray-900 text-gray-100 text-xs p-3 overflow-x-auto"
+                  dangerouslySetInnerHTML={{ __html: highlight(msg.code_snippet) }} />
+              </div>
+            )}
+            <span className="text-xs text-gray-400 mt-0.5 mr-1">{timeStr}</span>
+          </div>
+        </div>
 
         {/* Reactions */}
         {Object.keys(reactionMap).length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
+          <div className="flex flex-wrap gap-1 mt-1 justify-end">
             {Object.entries(reactionMap).map(([emoji, users]) => (
-              <button key={emoji}
-                onClick={() => onReact(msg.id, emoji)}
+              <button key={emoji} onClick={() => onReact(msg.id, emoji)}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition
-                  ${users.includes(currentUserId)
-                    ? 'bg-blue-50 border-blue-300 text-blue-700'
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                  ${users.includes(currentUserId) ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
                 {emoji} {users.length}
               </button>
             ))}
           </div>
         )}
       </div>
+    );
+  }
 
-      {/* Action buttons — show on hover */}
-      <div className="opacity-0 group-hover:opacity-100 flex items-start gap-1 pt-0.5 transition-opacity">
-        <div className="relative">
-          <button onClick={() => setShowEmoji(!showEmoji)}
-            className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600">
-            <FaSmile size={13} />
-          </button>
-          {showEmoji && (
-            <div className="absolute right-0 top-8 bg-white border rounded-xl shadow-lg p-2 flex gap-1 z-20">
-              {QUICK_EMOJIS.map(e => (
-                <button key={e} onClick={() => { onReact(msg.id, e); setShowEmoji(false); }}
-                  className="hover:scale-125 transition-transform text-lg">{e}</button>
-              ))}
-            </div>
-          )}
+  // ── Other people: avatar + name on the left ───────────────
+  return (
+    <div className="group flex items-end gap-2 px-3 md:px-4 py-0.5">
+      <Avatar name={msg.display_name} url={msg.avatar_url} size={7} />
+      <div className="flex-1 min-w-0 max-w-xs md:max-w-md lg:max-w-lg">
+        <div className="flex items-baseline gap-2 mb-0.5 ml-1">
+          <span className="font-semibold text-xs text-gray-600">{msg.display_name}</span>
+          <span className="text-xs text-gray-400">{timeStr}</span>
         </div>
-        <button onClick={() => onReply(msg)}
-          className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600">
-          <FaReply size={13} />
-        </button>
-        {isOwn && (
-          <button onClick={() => onDelete(msg.id)}
-            className="p-1.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-500">
-            <FaTrash size={13} />
-          </button>
+
+        {msg.reply_to_id && msg.reply_preview && (
+          <div className="border-l-2 border-gray-300 pl-2 mb-1 text-xs text-gray-500 truncate ml-1">
+            ↩ {msg.reply_preview}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <div className="flex flex-col">
+            {msg.content && (
+              <div className="bg-white text-gray-800 px-4 py-2 rounded-2xl rounded-bl-sm text-sm break-words whitespace-pre-wrap shadow-sm border border-gray-100">
+                {msg.content}
+              </div>
+            )}
+            {msg.image_url && (
+              <img src={msg.image_url} alt="shared"
+                className="max-w-xs rounded-2xl rounded-bl-sm border cursor-pointer hover:opacity-90 shadow-sm"
+                onClick={() => window.open(msg.image_url, '_blank')} />
+            )}
+            {msg.code_snippet && (
+              <div className="rounded-2xl rounded-bl-sm overflow-hidden border border-gray-700 shadow-sm">
+                <div className="bg-gray-800 px-3 py-1 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{msg.code_language || 'python'}</span>
+                  <button onClick={() => { navigator.clipboard.writeText(msg.code_snippet); toast.success('Copied!'); }}
+                    className="text-xs text-gray-400 hover:text-white">copy</button>
+                </div>
+                <pre className="bg-gray-900 text-gray-100 text-xs p-3 overflow-x-auto"
+                  dangerouslySetInnerHTML={{ __html: highlight(msg.code_snippet) }} />
+              </div>
+            )}
+          </div>
+
+          {/* Hover actions */}
+          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity pb-1">
+            <div className="relative">
+              <button onClick={() => setShowEmoji(!showEmoji)}
+                className="p-1 rounded hover:bg-gray-200 text-gray-400">
+                <FaSmile size={12} />
+              </button>
+              {showEmoji && (
+                <div className="absolute left-0 bottom-8 bg-white border rounded-xl shadow-lg p-2 flex gap-1 z-20">
+                  {QUICK_EMOJIS.map(e => (
+                    <button key={e} onClick={() => { onReact(msg.id, e); setShowEmoji(false); }}
+                      className="hover:scale-125 transition-transform text-lg">{e}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => onReply(msg)} className="p-1 rounded hover:bg-gray-200 text-gray-400">
+              <FaReply size={12} />
+            </button>
+          </div>
+        </div>
+
+        {/* Reactions */}
+        {Object.keys(reactionMap).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1 ml-1">
+            {Object.entries(reactionMap).map(([emoji, users]) => (
+              <button key={emoji} onClick={() => onReact(msg.id, emoji)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition
+                  ${users.includes(currentUserId) ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                {emoji} {users.length}
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>
@@ -190,6 +263,9 @@ const ChatPage = () => {
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [onlineUsers] = useState(new Set());
   const [unreadCounts, setUnreadCounts] = useState({}); // { channelId/dmThreadId: count }
+  const [typingUsers, setTypingUsers] = useState([]); // names of people currently typing
+  const typingTimeoutRef = useRef(null);
+  const isTypingRef = useRef(false);
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
   const textRef = useRef(null);
@@ -355,7 +431,25 @@ const ChatPage = () => {
       })
       .subscribe();
 
-    return () => { if (realtimeRef.current) supabase.removeChannel(realtimeRef.current); };
+    // ── Typing indicator via Supabase Broadcast (ephemeral, not stored)
+    const typingChannel = supabase.channel(`typing-${channelId || dmThreadId}`)
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (payload.user_id === user?.id) return;
+        setTypingUsers(prev => {
+          if (!prev.includes(payload.name)) return [...prev, payload.name];
+          return prev;
+        });
+        // Remove after 3 seconds of no update
+        setTimeout(() => {
+          setTypingUsers(prev => prev.filter(n => n !== payload.name));
+        }, 3000);
+      })
+      .subscribe();
+
+    return () => {
+      if (realtimeRef.current) supabase.removeChannel(realtimeRef.current);
+      supabase.removeChannel(typingChannel);
+    };
   }, [activeChannel, activeDM, loadMessages]);
 
   // ── Send message ───────────────────────────────────────────
@@ -386,6 +480,7 @@ const ChatPage = () => {
     setText('');
     setReplyTo(null);
     setCodeMode(false);
+    isTypingRef.current = false;
   };
 
   // ── Upload image ───────────────────────────────────────────
@@ -636,7 +731,7 @@ const ChatPage = () => {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto py-3">
+        <div className="flex-1 overflow-y-auto py-3" style={{background: "linear-gradient(135deg, #f8faff 0%, #f0f4ff 100%)"}}>
           {messages.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <FaCommentDots className="text-4xl mx-auto mb-3 opacity-30" />
@@ -673,6 +768,22 @@ const ChatPage = () => {
           })}
           <div ref={bottomRef} />
         </div>
+
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <div className="px-4 py-1 flex items-center gap-2">
+            <div className="flex gap-1 items-center">
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/>
+            </div>
+            <span className="text-xs text-gray-500 italic">
+              {typingUsers.length === 1
+                ? `${typingUsers[0]} is typing...`
+                : `${typingUsers.slice(0,-1).join(', ')} and ${typingUsers.at(-1)} are typing...`}
+            </span>
+          </div>
+        )}
 
         {/* Reply preview */}
         {replyTo && (
@@ -720,7 +831,20 @@ const ChatPage = () => {
             <textarea
               ref={textRef}
               value={text}
-              onChange={e => setText(e.target.value)}
+              onChange={e => {
+                setText(e.target.value);
+                // Broadcast typing indicator
+                if (user && (activeChannel || activeDM)) {
+                  const key = activeDM?.thread_id || activeChannel?.id;
+                  if (!isTypingRef.current) {
+                    isTypingRef.current = true;
+                    supabase.channel(`typing-${key}`)
+                      .send({ type: 'broadcast', event: 'typing', payload: { user_id: user.id, name: displayName } });
+                  }
+                  clearTimeout(typingTimeoutRef.current);
+                  typingTimeoutRef.current = setTimeout(() => { isTypingRef.current = false; }, 2000);
+                }
+              }}
               onKeyDown={handleKey}
               disabled={!user}
               rows={codeMode ? 4 : 1}

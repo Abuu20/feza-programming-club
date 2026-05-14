@@ -31,14 +31,69 @@ const sendNotification = (title, body, icon) => {
 // ── Emoji picker (simple inline) ─────────────────────────────
 const QUICK_EMOJIS = ['👍','❤️','😂','🔥','🎉','👀','✅','💯','🐍','🚀'];
 
-// ── Syntax-highlight shim (inline, no deps) ──────────────────
-const highlight = (code) => code
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  .replace(/(#.*$)/gm, '<span style="color:#6A9955">$1</span>')
-  .replace(/\b(def|class|import|from|return|if|else|elif|for|while|in|not|and|or|True|False|None|print|len|range)\b/g,
-    '<span style="color:#569CD6">$1</span>')
-  .replace(/(".*?"|'.*?')/g, '<span style="color:#CE9178">$1</span>')
-  .replace(/\b(\d+)\b/g, '<span style="color:#B5CEA8">$1</span>');
+// ── Syntax highlighter — proper tokeniser, no regex bleed ────
+const highlight = (rawCode) => {
+  const KW = new Set(['def','class','import','from','return','if','elif','else',
+    'for','while','in','not','and','or','True','False','None','break','continue',
+    'pass','try','except','finally','with','as','lambda','yield','global',
+    'nonlocal','del','assert','raise','is','await','async']);
+  const BI = new Set(['print','len','range','input','int','float','str','list',
+    'dict','set','tuple','bool','type','isinstance','enumerate','zip','map',
+    'filter','sorted','reversed','sum','min','max','abs','round','open',
+    'append','extend','format','super','self']);
+  const e = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  return rawCode.split('\n').map(line => {
+    const out = [];
+    let i = 0;
+    while (i < line.length) {
+      const ch = line[i];
+      // comment
+      if (ch === '#') {
+        out.push('<span style="color:#6A9955;font-style:italic">' + e(line.slice(i)) + '</span>');
+        break;
+      }
+      // string
+      if (ch === '"' || ch === "'") {
+        const q = ch; let j = i + 1;
+        while (j < line.length && line[j] !== q) { if (line[j] === '\\') j++; j++; }
+        j++;
+        out.push('<span style="color:#CE9178">' + e(line.slice(i, j)) + '</span>');
+        i = j; continue;
+      }
+      // number
+      if (/[0-9]/.test(ch) && (i === 0 || !/\w/.test(line[i-1]))) {
+        let j = i;
+        while (j < line.length && /[0-9._xXbBoO]/.test(line[j])) j++;
+        out.push('<span style="color:#B5CEA8">' + e(line.slice(i, j)) + '</span>');
+        i = j; continue;
+      }
+      // identifier / keyword / builtin
+      if (/[a-zA-Z_]/.test(ch)) {
+        let j = i;
+        while (j < line.length && /\w/.test(line[j])) j++;
+        const word = line.slice(i, j);
+        const isCall = line[j] === '(';
+        if (KW.has(word)) {
+          out.push('<span style="color:#569CD6;font-weight:600">' + e(word) + '</span>');
+        } else if (BI.has(word) || isCall) {
+          out.push('<span style="color:#DCDCAA">' + e(word) + '</span>');
+        } else {
+          out.push(e(word));
+        }
+        i = j; continue;
+      }
+      // operator
+      if (/[+\-*\/=<>!%&|^~]/.test(ch)) {
+        out.push('<span style="color:#D4D4D4">' + e(ch) + '</span>');
+        i++; continue;
+      }
+      out.push(e(ch));
+      i++;
+    }
+    return out.join('');
+  }).join('\n');
+};
 
 // ── Avatar helper — uses px sizing to avoid Tailwind JIT cache misses ──────
 const Avatar = ({ name, url, size = 8 }) => {
@@ -62,9 +117,10 @@ const Avatar = ({ name, url, size = 8 }) => {
 };
 
 // ── Message bubble ────────────────────────────────────────────
-const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, isDM = false }) => {
+const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit, isDM=false, editingMsgId, editText, setEditText, onSaveEdit, onCancelEdit }) => {
   const [showEmoji, setShowEmoji] = useState(false);
   const isOwn = msg.user_id === currentUserId;
+  const isEditing = editingMsgId === msg.id;
 
   if (msg.is_deleted) return (
     <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} px-3 md:px-4 py-0.5`}>
@@ -114,6 +170,9 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, isDM = 
             <button onClick={() => onReply(msg)} className="p-1 rounded hover:bg-gray-200 text-gray-400">
               <FaReply size={12} />
             </button>
+            <button onClick={() => onEdit(msg)} className="p-1 rounded hover:bg-gray-200 text-gray-400" title="Edit">
+              ✏️
+            </button>
             <button onClick={() => onDelete(msg.id)} className="p-1 rounded hover:bg-red-100 text-red-400">
               <FaTrash size={12} />
             </button>
@@ -121,9 +180,23 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, isDM = 
 
           {/* Bubble */}
           <div className="flex flex-col items-end">
-            {msg.content && (
+            {isEditing ? (
+              <div className="flex flex-col gap-1 w-64">
+                <textarea
+                  className="w-full text-sm p-2 rounded-xl border border-primary-300 focus:outline-none text-gray-800 resize-none"
+                  rows={3} value={editText}
+                  autoFocus
+                  onChange={e => setEditText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSaveEdit(msg.id); } if (e.key === 'Escape') onCancelEdit(); }}
+                />
+                <div className="flex gap-2 justify-end text-xs">
+                  <button onClick={onCancelEdit} className="text-gray-500 hover:text-gray-700">cancel</button>
+                  <button onClick={() => onSaveEdit(msg.id)} className="text-white bg-primary-600 px-2 py-0.5 rounded">save</button>
+                </div>
+              </div>
+            ) : msg.content && (
               <div className="bg-primary-600 text-white px-4 py-2 rounded-2xl rounded-br-sm text-sm break-words whitespace-pre-wrap shadow-sm">
-                {msg.content}
+                {msg.content}{msg.is_edited && <span className="text-primary-200 text-xs ml-1">(edited)</span>}
               </div>
             )}
             {msg.image_url && (
@@ -185,7 +258,7 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, isDM = 
           <div className="flex flex-col">
             {msg.content && (
               <div className="bg-white text-gray-800 px-4 py-2 rounded-2xl rounded-bl-sm text-sm break-words whitespace-pre-wrap shadow-sm border border-gray-100">
-                {msg.content}
+                {msg.content}{msg.is_edited && <span className="text-gray-400 text-xs ml-1">(edited)</span>}
               </div>
             )}
             {msg.image_url && (
@@ -266,14 +339,21 @@ const ChatPage = () => {
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [onlineUsers] = useState(new Set());
   const [unreadCounts, setUnreadCounts] = useState({}); // { channelId/dmThreadId: count }
-  const [typingUsers, setTypingUsers] = useState([]); // names of people currently typing
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [editingMsgId, setEditingMsgId] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [lastSeen, setLastSeen] = useState({}); // { user_id: timestamp }
   const typingTimeoutRef = useRef(null);
   const isTypingRef = useRef(false);
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
   const textRef = useRef(null);
   const realtimeRef = useRef(null);
-  const globalRealtimeRef = useRef(null); // listens to ALL channels for notifications+unread
+  const globalRealtimeRef = useRef(null);
+  const pageRef = useRef(0);
+  const hasMoreRef = useRef(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
 
   // Profile info
   const myProfile = members.find(m => m.user_id === user?.id);
@@ -344,13 +424,29 @@ const ChatPage = () => {
   // ── Load channels ──────────────────────────────────────────
   useEffect(() => {
     requestNotificationPermission();
+
+    // Update this user's last_seen now and whenever the tab regains focus
+    const updateLastSeen = async () => {
+      if (!user?.id) return;
+      await supabase.from('members')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('user_id', user.id);
+    };
+    updateLastSeen();
+    window.addEventListener('focus', updateLastSeen);
+    window.addEventListener('focus', updateLastSeen);
+
     const load = async () => {
       const { data } = await supabase.from('chat_channels').select('*').order('created_at');
       setChannels(data || []);
       if (data?.length) setActiveChannel(data[0]);
 
-      const { data: mems } = await supabase.from('members').select('user_id, name, photo_url, role, status');
+      const { data: mems } = await supabase.from('members').select('user_id, name, photo_url, role, status, last_seen');
       setMembers(mems || []);
+      // Build lastSeen map
+      const lsMap = {};
+      (mems || []).forEach(m => { if (m.last_seen) lsMap[m.user_id] = m.last_seen; });
+      setLastSeen(lsMap);
     };
     load();
   }, []);
@@ -369,12 +465,13 @@ const ChatPage = () => {
   }, [user]);
 
   // ── Load messages + subscribe to realtime ─────────────────
-  const loadMessages = useCallback(async (channelId, dmThreadId) => {
+  const loadMessages = useCallback(async (channelId, dmThreadId, append = false) => {
+    const from = append ? pageRef.current * 50 : 0;
     let query = supabase
       .from('chat_messages')
       .select('*, reactions:chat_reactions(*)')
-      .order('created_at', { ascending: true })
-      .limit(100);
+      .order('created_at', { ascending: false })
+      .range(from, from + 49);
 
     if (dmThreadId) {
       query = query.eq('dm_thread_id', dmThreadId);
@@ -383,9 +480,25 @@ const ChatPage = () => {
     }
 
     const { data } = await query;
-    setMessages(data || []);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    const msgs = (data || []).reverse();
+    if (append) {
+      setMessages(prev => [...msgs, ...prev]);
+    } else {
+      pageRef.current = 0;
+      hasMoreRef.current = true;
+      setMessages(msgs);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
+    }
+    if ((data || []).length < 50) hasMoreRef.current = false;
   }, []);
+
+  const loadOlderMessages = async () => {
+    if (!hasMoreRef.current || loadingMore) return;
+    setLoadingMore(true);
+    pageRef.current += 1;
+    await loadMessages(activeChannel?.id, activeDM?.thread_id, true);
+    setLoadingMore(false);
+  };
 
   useEffect(() => {
     if (!activeChannel && !activeDM) return;
@@ -524,6 +637,29 @@ const ChatPage = () => {
     }
   };
 
+  // ── Edit message ──────────────────────────────────────────
+  const startEdit = (msg) => { setEditingMsgId(msg.id); setEditText(msg.content || ''); };
+  const cancelEdit = () => { setEditingMsgId(null); setEditText(''); };
+  const saveEdit = async (msgId) => {
+    if (!editText.trim()) return;
+    const { error } = await supabase.from('chat_messages')
+      .update({ content: editText, is_edited: true })
+      .eq('id', msgId);
+    if (!error) {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: editText, is_edited: true } : m));
+      setEditingMsgId(null);
+      setEditText('');
+    }
+  };
+
+  // ── Remove DM thread ───────────────────────────────────────
+  const removeDM = async (threadId) => {
+    if (!window.confirm('Remove this conversation from your list?')) return;
+    await supabase.from('dm_threads').delete().eq('id', threadId);
+    setDmThreads(prev => prev.filter(t => t.id !== threadId));
+    if (activeDM?.thread_id === threadId) { setActiveDM(null); setActiveChannel(channels[0] || null); }
+  };
+
   // ── Delete message ─────────────────────────────────────────
   const handleDelete = async (msgId) => {
     await supabase.from('chat_messages').update({ is_deleted: true }).eq('id', msgId);
@@ -575,6 +711,25 @@ const ChatPage = () => {
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !codeMode) { e.preventDefault(); sendMessage(); }
+  };
+
+  const formatLastSeen = (ts) => {
+    if (!ts) return 'Never';
+    const diff = Date.now() - new Date(ts).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hrs  = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 2)  return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hrs  < 24) return `${hrs}h ago`;
+    if (days < 7)  return `${days}d ago`;
+    return new Date(ts).toLocaleDateString();
+  };
+
+  const isOnline = (userId) => {
+    const ts = lastSeen[userId];
+    if (!ts) return false;
+    return Date.now() - new Date(ts).getTime() < 3 * 60 * 1000; // online if seen < 3 min ago
   };
 
   const filteredMembers = members.filter(m =>
@@ -662,17 +817,23 @@ const ChatPage = () => {
               {myDMs.map(dm => (
                 <button key={dm.thread_id}
                   onClick={() => { setActiveDM(dm); setActiveChannel(null); setShowSidebar(false); setUnreadCounts(prev => { const n = {...prev}; delete n[dm.thread_id]; return n; }); dispatchUnread(unreadCounts, dm.thread_id); }}
-                  className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 text-sm transition
+                  className={`group w-full text-left px-2 py-1.5 rounded flex items-center gap-2 text-sm transition
                     ${activeDM?.thread_id === dm.thread_id
                       ? 'bg-gray-600 text-white'
                       : 'hover:bg-gray-700 text-gray-400 hover:text-white'}`}>
                   <Avatar name={dm.other_user.name} url={dm.other_user.photo_url} size={5} />
-                  <span className="truncate flex-1">{dm.other_user.name}</span>
+                  <span className="truncate flex-1 text-xs">{dm.other_user.name}</span>
                   {unreadCounts[dm.thread_id] > 0 && (
                     <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                       {unreadCounts[dm.thread_id] > 99 ? '99+' : unreadCounts[dm.thread_id]}
                     </span>
                   )}
+                  <button
+                    onClick={e => { e.stopPropagation(); removeDM(dm.thread_id); }}
+                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition ml-1 flex-shrink-0"
+                    title="Remove conversation">
+                    <FaTimes size={10} />
+                  </button>
                 </button>
               ))}
               {myDMs.length === 0 && (
@@ -735,6 +896,14 @@ const ChatPage = () => {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto py-3" style={{background: "linear-gradient(135deg, #f8faff 0%, #f0f4ff 100%)"}}>
+          {hasMoreRef.current && (
+            <div className="flex justify-center py-2">
+              <button onClick={loadOlderMessages} disabled={loadingMore}
+                className="text-xs text-primary-600 hover:text-primary-800 bg-white border border-gray-200 px-4 py-1.5 rounded-full shadow-sm disabled:opacity-50">
+                {loadingMore ? 'Loading...' : '⬆ Load older messages'}
+              </button>
+            </div>
+          )}
           {messages.length === 0 && (
             <div className="text-center py-16 text-gray-400">
               <FaCommentDots className="text-4xl mx-auto mb-3 opacity-30" />
@@ -764,7 +933,13 @@ const ChatPage = () => {
                   onReact={handleReact}
                   onReply={setReplyTo}
                   onDelete={handleDelete}
+                  onEdit={startEdit}
                   isDM={!!activeDM}
+                  editingMsgId={editingMsgId}
+                  editText={editText}
+                  setEditText={setEditText}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={cancelEdit}
                 />
               </React.Fragment>
             );
@@ -803,14 +978,114 @@ const ChatPage = () => {
 
         {/* Input area */}
         <div className="px-2 md:px-4 pb-3 md:pb-4 pt-2">
+
           {codeMode && (
-            <div className="mb-1 flex items-center gap-2">
-              <span className="text-xs text-gray-500 font-mono">Python code mode</span>
-              <button onClick={() => setCodeMode(false)} className="text-xs text-red-400 hover:text-red-600">✕ cancel</button>
+            <div className="mb-2 rounded-xl overflow-hidden shadow-xl" style={{border:'1px solid #3c3c3c'}}>
+
+              {/* ── Title bar */}
+              <div className="flex items-center gap-2 px-3 py-2" style={{background:'#2b2b2b',borderBottom:'1px solid #3c3c3c'}}>
+                <div className="flex gap-1.5">
+                  <span className="w-3 h-3 rounded-full cursor-pointer hover:opacity-80" style={{background:'#ff5f57'}} onClick={()=>setCodeMode(false)} title="Close" />
+                  <span className="w-3 h-3 rounded-full" style={{background:'#febc2e'}} />
+                  <span className="w-3 h-3 rounded-full" style={{background:'#28c840'}} />
+                </div>
+                <span className="text-xs ml-2 font-mono" style={{color:'#9d9d9d'}}>solution.py</span>
+                <div className="flex-1" />
+                <span className="text-xs px-2 py-0.5 rounded" style={{background:'#3c3c3c',color:'#6a9955'}}>Python 3</span>
+              </div>
+
+              {/* ── Tab bar */}
+              <div className="flex items-center px-2" style={{background:'#2d2d2d',borderBottom:'1px solid #3c3c3c'}}>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono border-t-2" style={{borderColor:'#4a9eff',color:'#cdd6f4',background:'#1e1e2e'}}>
+                  <span>🐍</span> solution.py
+                </div>
+              </div>
+
+              {/* ── Editor area: line numbers + textarea side by side */}
+              <div className="flex relative" style={{background:'#1e1e2e',minHeight:'120px'}}>
+                {/* Line numbers */}
+                <div className="select-none text-right py-3 px-3 text-xs font-mono leading-5 flex-shrink-0"
+                  style={{background:'#1e1e2e',color:'#495162',borderRight:'1px solid #3c3c3c',minWidth:'3rem'}}>
+                  {(text || ' ').split('\n').map((_,i) => (
+                    <div key={i} style={{lineHeight:'1.5rem'}}>{i+1}</div>
+                  ))}
+                </div>
+
+                {/* The actual textarea — invisible but captures input */}
+                <textarea
+                  ref={textRef}
+                  value={text}
+                  onChange={e => {
+                    setText(e.target.value);
+                    if (user && (activeChannel || activeDM)) {
+                      const key = activeDM?.thread_id || activeChannel?.id;
+                      if (!isTypingRef.current) {
+                        isTypingRef.current = true;
+                        supabase.channel('typing-' + key)
+                          .send({ type: 'broadcast', event: 'typing', payload: { user_id: user.id, name: displayName } });
+                      }
+                      clearTimeout(typingTimeoutRef.current);
+                      typingTimeoutRef.current = setTimeout(() => { isTypingRef.current = false; }, 2000);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Tab') {
+                      e.preventDefault();
+                      const s = e.target.selectionStart;
+                      const v = text;
+                      const newVal = v.substring(0,s) + '    ' + v.substring(s);
+                      setText(newVal);
+                      setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s+4; }, 0);
+                    }
+                    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); }
+                  }}
+                  rows={Math.max(5, (text || '').split('\n').length + 1)}
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  className="absolute inset-0 w-full h-full resize-none outline-none font-mono text-xs leading-6 py-3 px-3"
+                  style={{
+                    background:'transparent',
+                    color:'transparent',
+                    caretColor:'#aeafad',
+                    zIndex:2,
+                    lineHeight:'1.5rem',
+                  }}
+                  placeholder=""
+                />
+
+                {/* Syntax-highlighted overlay — same layout as textarea */}
+                <pre className="flex-1 font-mono text-xs py-3 px-3 overflow-x-auto pointer-events-none"
+                  style={{color:'#cdd6f4',lineHeight:'1.5rem',margin:0,whiteSpace:'pre-wrap',wordBreak:'break-all'}}
+                  dangerouslySetInnerHTML={{ __html:
+                    (text || '<span style="color:#495162">  # Write your Python code here...\n  # Example:\n  for i in range(5):\n      print(i)</span>')
+                      .split('\n').map(line => highlight(line) || ' ').join('\n')
+                  }}
+                />
+              </div>
+
+              {/* ── Status bar */}
+              <div className="flex items-center justify-between px-4 py-1.5 text-xs font-mono"
+                style={{background:'#007acc',color:'white'}}>
+                <div className="flex items-center gap-4">
+                  <span>🐍 Python 3</span>
+                  <span>UTF-8</span>
+                  <span>Ln {(text.slice(0,text.length).split('\n').length)}, Col {(text.split('\n').at(-1)?.length||0)+1}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="opacity-75">Ctrl+Enter to send</span>
+                  <button onClick={sendMessage} disabled={!text.trim() || !user}
+                    className="flex items-center gap-1.5 px-3 py-0.5 rounded font-sans font-semibold disabled:opacity-40"
+                    style={{background:'#1a7f37',color:'white'}}>
+                    <FaPaperPlane size={10} /> Send Code
+                  </button>
+                </div>
+              </div>
+
             </div>
           )}
+
           <div className={`flex gap-2 items-end border rounded-xl p-2 transition-all
-            ${codeMode ? 'bg-gray-900 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+            ${codeMode ? 'bg-gray-900 border-gray-600 opacity-0 h-0 overflow-hidden p-0' : 'bg-gray-50 border-gray-200'}`}>
 
             {/* Image upload */}
             <button onClick={() => fileRef.current?.click()}
@@ -830,10 +1105,11 @@ const ChatPage = () => {
               <FaCode />
             </button>
 
-            {/* Text input */}
+            {/* Text input — hidden when code editor is open */}
             <textarea
               ref={textRef}
               value={text}
+              style={{ display: codeMode ? 'none' : undefined }}
               onChange={e => {
                 setText(e.target.value);
                 // Broadcast typing indicator
@@ -863,16 +1139,16 @@ const ChatPage = () => {
               }}
             />
 
-            {/* Send */}
-            <button onClick={sendMessage}
-              disabled={!text.trim() || !user}
-              className="p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:opacity-40 flex-shrink-0">
-              <FaPaperPlane size={14} />
-            </button>
+            {/* Send — only shown in text mode */}
+            {!codeMode && (
+              <button onClick={sendMessage}
+                disabled={!text.trim() || !user}
+                className="p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:opacity-40 flex-shrink-0">
+                <FaPaperPlane size={14} />
+              </button>
+            )}
           </div>
-          <p className="text-xs text-gray-400 mt-1 px-1">
-            {codeMode ? 'Ctrl+Enter to send code' : 'Enter to send • Shift+Enter for new line'}
-          </p>
+          <p className="text-xs text-gray-400 mt-1 px-1">Enter to send • Shift+Enter for new line</p>
         </div>
       </div>
 
@@ -901,8 +1177,17 @@ const ChatPage = () => {
                   <Avatar name={m.name} url={m.photo_url} size={8} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{m.name}</p>
-                  <p className="text-xs text-gray-400 capitalize">{m.role}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-gray-800 truncate">{m.name}</p>
+                    {isOnline(m.user_id) && (
+                      <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="Online" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    {isOnline(m.user_id) ? <span className="text-green-500">● Online</span>
+                      : m.user_id ? `Last seen: ${formatLastSeen(lastSeen[m.user_id])}`
+                      : <span className="capitalize">{m.role}</span>}
+                  </p>
                 </div>
                 {user && m.user_id && m.user_id !== user.id && (
                   <button onClick={() => startDM(m)}

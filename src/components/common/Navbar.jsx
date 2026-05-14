@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   CodeBracketIcon,
@@ -21,6 +21,68 @@ const Navbar = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
+
+  // Firefox-compatible unread count listener
+  useEffect(() => {
+    // Handler for custom events from ChatPage
+    const handleUnreadUpdate = (event) => {
+      console.log('Navbar received unread update:', event.detail?.total);
+      const total = event.detail?.total || 0;
+      setChatUnread(total);
+      
+      // Store in sessionStorage for Firefox persistence
+      try {
+        sessionStorage.setItem('feza-chat-unread-total', total.toString());
+      } catch (e) {}
+    };
+    
+    // Listen for the custom event
+    window.addEventListener('feza-chat-unread', handleUnreadUpdate);
+    
+    // Firefox fallback: Also check localStorage directly for unread counts
+    const checkLocalStorageForUnread = () => {
+      try {
+        const savedCounts = localStorage.getItem('feza-unread-counts');
+        if (savedCounts) {
+          const counts = JSON.parse(savedCounts);
+          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          console.log('Navbar loaded from localStorage:', total);
+          setChatUnread(total);
+          sessionStorage.setItem('feza-chat-unread-total', total.toString());
+        } else {
+          // Check sessionStorage as backup
+          const sessionTotal = sessionStorage.getItem('feza-chat-unread-total');
+          if (sessionTotal) {
+            setChatUnread(parseInt(sessionTotal, 10));
+          }
+        }
+      } catch (e) {}
+    };
+    
+    // Initial load
+    checkLocalStorageForUnread();
+    
+    // Listen for storage events (for cross-tab sync in Firefox)
+    const handleStorageChange = (e) => {
+      if (e.key === 'feza-unread-counts') {
+        checkLocalStorageForUnread();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Firefox: Also check periodically as backup (every 2 seconds)
+    const intervalId = setInterval(() => {
+      checkLocalStorageForUnread();
+    }, 2000);
+    
+    return () => {
+      window.removeEventListener('feza-chat-unread', handleUnreadUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(intervalId);
+    };
+  }, []);
 
   const handleLogout = async () => {
     await signOut();
@@ -33,7 +95,6 @@ const Navbar = () => {
   const navLinks = [
     { path: '/', icon: HomeIcon, label: 'Home' },
     { path: '/activities', icon: CalendarIcon, label: 'Activities' },
-    { path: '/chat', icon: ChatBubbleLeftRightIcon, label: 'Chat' },  
     { path: '/members', icon: UserGroupIcon, label: 'Members' },
     { path: '/gallery', icon: PhotoIcon, label: 'Gallery' },
     { path: '/announcements', icon: BellIcon, label: 'News' },
@@ -42,8 +103,6 @@ const Navbar = () => {
     { path: '/contact', icon: EnvelopeIcon, label: 'Contact' },
     { path: '/curriculum', icon: FaBookOpen, label: 'Curriculum' },
     { path: '/achievements', icon: FaTrophy, label: 'Hall of Fame' },
-
-
   ];
 
   return (
@@ -62,6 +121,24 @@ const Navbar = () => {
 
           {/* Desktop Navigation - Scrollable if needed */}
           <div className="hidden lg:flex items-center space-x-1 overflow-x-auto">
+            {/* Chat with unread badge - Firefox optimized */}
+            <Link to="/chat"
+              className="relative px-3 py-2 rounded-lg hover:bg-primary-600 transition flex items-center gap-2 text-sm whitespace-nowrap"
+              onClick={() => {
+                // Reset unread when clicking on chat
+                setChatUnread(0);
+                try {
+                  sessionStorage.setItem('feza-chat-unread-total', '0');
+                } catch (e) {}
+              }}>
+              <ChatBubbleLeftRightIcon className="w-4 h-4" />
+              <span>Chat</span>
+              {chatUnread > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 animate-pulse">
+                  {chatUnread > 99 ? '99+' : chatUnread}
+                </span>
+              )}
+            </Link>
             {navLinks.map((link) => (
               <Link
                 key={link.path}
@@ -139,6 +216,24 @@ const Navbar = () => {
         {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="lg:hidden py-4 border-t border-primary-400">
+            {/* Chat with unread badge — mobile */}
+            <Link to="/chat"
+              onClick={() => {
+                setIsMenuOpen(false);
+                setChatUnread(0);
+                try {
+                  sessionStorage.setItem('feza-chat-unread-total', '0');
+                } catch (e) {}
+              }}
+              className="relative flex items-center gap-3 px-4 py-3 hover:bg-primary-600 transition rounded-lg mb-1">
+              <ChatBubbleLeftRightIcon className="w-5 h-5" />
+              <span>Chat</span>
+              {chatUnread > 0 && (
+                <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1">
+                  {chatUnread > 99 ? '99+' : chatUnread}
+                </span>
+              )}
+            </Link>
             {navLinks.map((link) => (
               <Link
                 key={link.path}

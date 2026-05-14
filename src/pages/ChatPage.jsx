@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import {
   FaHashtag, FaLock, FaPaperPlane, FaImage, FaCode, FaSmile,
   FaTimes, FaReply, FaUsers, FaSearch, FaPlus, FaCommentDots,
-  FaTrash, FaChevronDown, FaCircle
+  FaTrash, FaChevronDown, FaCircle, FaFileCode, FaDownload
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
@@ -205,13 +205,29 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
                 onClick={() => window.open(msg.image_url, '_blank')} />
             )}
             {msg.code_snippet && (
-              <div className="rounded-2xl rounded-br-sm overflow-hidden border border-gray-700 shadow-sm w-full">
-                <div className="bg-gray-800 px-3 py-1 flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{msg.code_language || 'python'}</span>
-                  <button onClick={() => { navigator.clipboard.writeText(msg.code_snippet); toast.success('Copied!'); }}
-                    className="text-xs text-gray-400 hover:text-white">copy</button>
+              <div className="rounded-2xl rounded-br-sm overflow-hidden border border-gray-700 shadow-sm w-full max-w-sm">
+                <div className="bg-gray-800 px-3 py-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <FaFileCode className="text-green-400 flex-shrink-0" size={12} />
+                    <span className="text-xs text-gray-300 truncate font-mono">
+                      {msg.code_language?.endsWith('.py') ? msg.code_language : 'python'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => { navigator.clipboard.writeText(msg.code_snippet); toast.success('Copied!'); }}
+                      className="text-xs text-gray-400 hover:text-white">copy</button>
+                    {msg.code_language?.endsWith('.py') && (
+                      <button onClick={() => {
+                        const blob = new Blob([msg.code_snippet], {type:'text/plain'});
+                        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                        a.download = msg.code_language; a.click();
+                      }} className="text-xs text-gray-400 hover:text-green-400 flex items-center gap-1">
+                        <FaDownload size={10} /> .py
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <pre className="bg-gray-900 text-gray-100 text-xs p-3 overflow-x-auto"
+                <pre className="bg-gray-900 text-gray-100 text-xs p-3 overflow-x-auto max-h-48"
                   dangerouslySetInnerHTML={{ __html: highlight(msg.code_snippet) }} />
               </div>
             )}
@@ -267,13 +283,29 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
                 onClick={() => window.open(msg.image_url, '_blank')} />
             )}
             {msg.code_snippet && (
-              <div className="rounded-2xl rounded-bl-sm overflow-hidden border border-gray-700 shadow-sm">
-                <div className="bg-gray-800 px-3 py-1 flex items-center justify-between">
-                  <span className="text-xs text-gray-400">{msg.code_language || 'python'}</span>
-                  <button onClick={() => { navigator.clipboard.writeText(msg.code_snippet); toast.success('Copied!'); }}
-                    className="text-xs text-gray-400 hover:text-white">copy</button>
+              <div className="rounded-2xl rounded-bl-sm overflow-hidden border border-gray-700 shadow-sm max-w-sm">
+                <div className="bg-gray-800 px-3 py-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <FaFileCode className="text-green-400 flex-shrink-0" size={12} />
+                    <span className="text-xs text-gray-300 truncate font-mono">
+                      {msg.code_language?.endsWith('.py') ? msg.code_language : 'python'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => { navigator.clipboard.writeText(msg.code_snippet); toast.success('Copied!'); }}
+                      className="text-xs text-gray-400 hover:text-white">copy</button>
+                    {msg.code_language?.endsWith('.py') && (
+                      <button onClick={() => {
+                        const blob = new Blob([msg.code_snippet], {type:'text/plain'});
+                        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                        a.download = msg.code_language; a.click();
+                      }} className="text-xs text-gray-400 hover:text-green-400 flex items-center gap-1">
+                        <FaDownload size={10} /> .py
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <pre className="bg-gray-900 text-gray-100 text-xs p-3 overflow-x-auto"
+                <pre className="bg-gray-900 text-gray-100 text-xs p-3 overflow-x-auto max-h-48"
                   dangerouslySetInnerHTML={{ __html: highlight(msg.code_snippet) }} />
               </div>
             )}
@@ -329,6 +361,8 @@ const ChatPage = () => {
   const [dmThreads, setDmThreads] = useState([]);
   const [text, setText] = useState('');
   const [codeMode, setCodeMode] = useState(false);
+  const [editorMinimized, setEditorMinimized] = useState(false);
+  const [editorExpanded, setEditorExpanded] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -347,6 +381,7 @@ const ChatPage = () => {
   const isTypingRef = useRef(false);
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
+  const pyFileRef = useRef(null);
   const textRef = useRef(null);
   const realtimeRef = useRef(null);
   const globalRealtimeRef = useRef(null);
@@ -623,6 +658,41 @@ const ChatPage = () => {
       setReplyTo(null);
     } catch (e) { toast.error('Upload failed'); }
     finally { setUploading(false); }
+  };
+
+  // ── Upload Python file ────────────────────────────────────
+  const uploadPythonFile = async (file) => {
+    if (!user) { toast.error('Please log in to share files'); return; }
+    if (!file.name.endsWith('.py')) {
+      toast.error('Only .py Python files are allowed');
+      return;
+    }
+    if (file.size > 500 * 1024) { toast.error('File must be under 500KB'); return; }
+
+    setUploading(true);
+    try {
+      // Read file contents as text
+      const text = await file.text();
+      // Send as a code_snippet message with filename as language label
+      const { error } = await supabase.from('chat_messages').insert({
+        channel_id: activeDM ? null : activeChannel?.id,
+        dm_thread_id: activeDM?.thread_id || null,
+        user_id: user.id,
+        display_name: displayName,
+        avatar_url: avatarUrl,
+        code_snippet: text,
+        code_language: file.name,  // store filename so it shows in the header
+        reply_to_id: replyTo?.id || null,
+        reply_preview: replyTo ? (replyTo.content || '').slice(0, 80) : null,
+      });
+      if (error) throw error;
+      setReplyTo(null);
+      toast.success(`${file.name} shared!`);
+    } catch (e) {
+      toast.error('Failed to share file: ' + e.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   // ── React to message ───────────────────────────────────────
@@ -985,102 +1055,112 @@ const ChatPage = () => {
               {/* ── Title bar */}
               <div className="flex items-center gap-2 px-3 py-2" style={{background:'#2b2b2b',borderBottom:'1px solid #3c3c3c'}}>
                 <div className="flex gap-1.5">
-                  <span className="w-3 h-3 rounded-full cursor-pointer hover:opacity-80" style={{background:'#ff5f57'}} onClick={()=>setCodeMode(false)} title="Close" />
-                  <span className="w-3 h-3 rounded-full" style={{background:'#febc2e'}} />
-                  <span className="w-3 h-3 rounded-full" style={{background:'#28c840'}} />
+                  {/* Red = close */}
+                  <button className="w-3 h-3 rounded-full hover:opacity-75 transition focus:outline-none"
+                    style={{background:'#ff5f57'}} onClick={()=>{ setCodeMode(false); setEditorMinimized(false); setEditorExpanded(false); }} title="Close editor" />
+                  {/* Yellow = minimize — shrinks editor to just title bar */}
+                  <button className="w-3 h-3 rounded-full hover:opacity-75 transition focus:outline-none"
+                    style={{background:'#febc2e'}}
+                    onClick={()=>setEditorMinimized(m=>!m)} title="Minimize" />
+                  {/* Green = maximize — expands editor taller */}
+                  <button className="w-3 h-3 rounded-full hover:opacity-75 transition focus:outline-none"
+                    style={{background:'#28c840'}}
+                    onClick={()=>setEditorExpanded(m=>!m)} title="Maximize" />
                 </div>
                 <span className="text-xs ml-2 font-mono" style={{color:'#9d9d9d'}}>solution.py</span>
                 <div className="flex-1" />
                 <span className="text-xs px-2 py-0.5 rounded" style={{background:'#3c3c3c',color:'#6a9955'}}>Python 3</span>
               </div>
 
-              {/* ── Tab bar */}
-              <div className="flex items-center px-2" style={{background:'#2d2d2d',borderBottom:'1px solid #3c3c3c'}}>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono border-t-2" style={{borderColor:'#4a9eff',color:'#cdd6f4',background:'#1e1e2e'}}>
-                  <span>🐍</span> solution.py
-                </div>
-              </div>
+              {/* ── Everything below hidden when minimized */}
+              {!editorMinimized && (<>
 
-              {/* ── Editor area: line numbers + textarea side by side */}
-              <div className="flex relative" style={{background:'#1e1e2e',minHeight:'120px'}}>
-                {/* Line numbers */}
-                <div className="select-none text-right py-3 px-3 text-xs font-mono leading-5 flex-shrink-0"
-                  style={{background:'#1e1e2e',color:'#495162',borderRight:'1px solid #3c3c3c',minWidth:'3rem'}}>
-                  {(text || ' ').split('\n').map((_,i) => (
-                    <div key={i} style={{lineHeight:'1.5rem'}}>{i+1}</div>
-                  ))}
+                {/* ── Tab bar */}
+                <div className="flex items-center px-2" style={{background:'#2d2d2d',borderBottom:'1px solid #3c3c3c'}}>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono border-t-2"
+                    style={{borderColor:'#4a9eff',color:'#cdd6f4',background:'#1e1e2e'}}>
+                    <span>🐍</span> solution.py
+                  </div>
                 </div>
 
-                {/* The actual textarea — invisible but captures input */}
-                <textarea
-                  ref={textRef}
-                  value={text}
-                  onChange={e => {
-                    setText(e.target.value);
-                    if (user && (activeChannel || activeDM)) {
-                      const key = activeDM?.thread_id || activeChannel?.id;
-                      if (!isTypingRef.current) {
-                        isTypingRef.current = true;
-                        supabase.channel('typing-' + key)
-                          .send({ type: 'broadcast', event: 'typing', payload: { user_id: user.id, name: displayName } });
+                {/* ── Editor: line numbers + single visible textarea */}
+                <div className="flex" style={{background:'#1e1e2e', height: editorExpanded ? '420px' : '200px', transition:'height 0.2s ease'}}>
+
+                  {/* Line numbers */}
+                  <div className="select-none text-right flex-shrink-0 overflow-hidden"
+                    style={{background:'#1e1e2e',color:'#495162',borderRight:'1px solid #3c3c3c',
+                            width:'3rem',paddingTop:'12px',paddingBottom:'12px',fontFamily:'monospace',fontSize:'12px',lineHeight:'1.5rem'}}>
+                    {(text || ' ').split('\n').map((_,i) => (
+                      <div key={i} style={{paddingRight:'8px',lineHeight:'1.5rem'}}>{i+1}</div>
+                    ))}
+                  </div>
+
+                  {/* Single textarea — visible text, proper caret */}
+                  <textarea
+                    ref={textRef}
+                    value={text}
+                    autoFocus
+                    onChange={e => {
+                      setText(e.target.value);
+                      if (user && (activeChannel || activeDM)) {
+                        const key = activeDM?.thread_id || activeChannel?.id;
+                        if (!isTypingRef.current) {
+                          isTypingRef.current = true;
+                          supabase.channel('typing-' + key)
+                            .send({ type: 'broadcast', event: 'typing', payload: { user_id: user.id, name: displayName } });
+                        }
+                        clearTimeout(typingTimeoutRef.current);
+                        typingTimeoutRef.current = setTimeout(() => { isTypingRef.current = false; }, 2000);
                       }
-                      clearTimeout(typingTimeoutRef.current);
-                      typingTimeoutRef.current = setTimeout(() => { isTypingRef.current = false; }, 2000);
-                    }
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Tab') {
-                      e.preventDefault();
-                      const s = e.target.selectionStart;
-                      const v = text;
-                      const newVal = v.substring(0,s) + '    ' + v.substring(s);
-                      setText(newVal);
-                      setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s+4; }, 0);
-                    }
-                    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); }
-                  }}
-                  rows={Math.max(5, (text || '').split('\n').length + 1)}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                  className="absolute inset-0 w-full h-full resize-none outline-none font-mono text-xs leading-6 py-3 px-3"
-                  style={{
-                    background:'transparent',
-                    color:'transparent',
-                    caretColor:'#aeafad',
-                    zIndex:2,
-                    lineHeight:'1.5rem',
-                  }}
-                  placeholder=""
-                />
-
-                {/* Syntax-highlighted overlay — same layout as textarea */}
-                <pre className="flex-1 font-mono text-xs py-3 px-3 overflow-x-auto pointer-events-none"
-                  style={{color:'#cdd6f4',lineHeight:'1.5rem',margin:0,whiteSpace:'pre-wrap',wordBreak:'break-all'}}
-                  dangerouslySetInnerHTML={{ __html:
-                    (text || '<span style="color:#495162">  # Write your Python code here...\n  # Example:\n  for i in range(5):\n      print(i)</span>')
-                      .split('\n').map(line => highlight(line) || ' ').join('\n')
-                  }}
-                />
-              </div>
-
-              {/* ── Status bar */}
-              <div className="flex items-center justify-between px-4 py-1.5 text-xs font-mono"
-                style={{background:'#007acc',color:'white'}}>
-                <div className="flex items-center gap-4">
-                  <span>🐍 Python 3</span>
-                  <span>UTF-8</span>
-                  <span>Ln {(text.slice(0,text.length).split('\n').length)}, Col {(text.split('\n').at(-1)?.length||0)+1}</span>
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const s = e.target.selectionStart;
+                        const newVal = text.substring(0,s) + '    ' + text.substring(s);
+                        setText(newVal);
+                        setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s+4; }, 0);
+                      }
+                      if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); }
+                    }}
+                    spellCheck={false}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    placeholder="# Write your Python code here..."
+                    className="flex-1 resize-none outline-none w-full h-full"
+                    style={{
+                      background:'#1e1e2e',
+                      color:'#cdd6f4',
+                      caretColor:'#aeafad',
+                      fontFamily:"'JetBrains Mono','Fira Code','Courier New',monospace",
+                      fontSize:'13px',
+                      lineHeight:'1.5rem',
+                      padding:'12px',
+                      border:'none',
+                      tabSize:4,
+                    }}
+                  />
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="opacity-75">Ctrl+Enter to send</span>
-                  <button onClick={sendMessage} disabled={!text.trim() || !user}
-                    className="flex items-center gap-1.5 px-3 py-0.5 rounded font-sans font-semibold disabled:opacity-40"
-                    style={{background:'#1a7f37',color:'white'}}>
-                    <FaPaperPlane size={10} /> Send Code
-                  </button>
-                </div>
-              </div>
 
+                {/* ── Status bar */}
+                <div className="flex items-center justify-between px-4 py-1.5 text-xs font-mono"
+                  style={{background:'#007acc',color:'white'}}>
+                  <div className="flex items-center gap-4">
+                    <span>🐍 Python 3</span>
+                    <span>UTF-8</span>
+                    <span>Ln {text.split('\n').length}, Col {(text.split('\n').at(-1)?.length||0)+1}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="opacity-80 text-xs">Ctrl+Enter to send</span>
+                    <button onClick={sendMessage} disabled={!text.trim() || !user}
+                      className="flex items-center gap-1.5 px-3 py-0.5 rounded font-sans font-semibold text-xs disabled:opacity-40 hover:opacity-90 transition"
+                      style={{background:'#1a7f37',color:'white'}}>
+                      <FaPaperPlane size={10} /> Send Code
+                    </button>
+                  </div>
+                </div>
+
+              </>)}
             </div>
           )}
 
@@ -1090,12 +1170,23 @@ const ChatPage = () => {
             {/* Image upload */}
             <button onClick={() => fileRef.current?.click()}
               disabled={uploading || !user}
+              title="Share image"
               className="p-2 text-gray-400 hover:text-primary-600 transition disabled:opacity-40 flex-shrink-0">
               {uploading ? <div className="w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
                 : <FaImage />}
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden"
               onChange={e => e.target.files[0] && uploadImage(e.target.files[0])} />
+
+            {/* Python file upload */}
+            <button onClick={() => pyFileRef.current?.click()}
+              disabled={uploading || !user}
+              title="Share a .py file"
+              className="p-2 text-gray-400 hover:text-green-500 transition disabled:opacity-40 flex-shrink-0">
+              <FaFileCode />
+            </button>
+            <input ref={pyFileRef} type="file" accept=".py" className="hidden"
+              onChange={e => e.target.files[0] && uploadPythonFile(e.target.files[0])} />
 
             {/* Code toggle */}
             <button onClick={() => setCodeMode(!codeMode)}

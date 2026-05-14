@@ -14,11 +14,9 @@ import { announcementsService } from '../services/announcements';
 import { useActivities } from '../hooks/useActivities';
 import { formatDate } from '../utils/helpers';
 import Loader from '../components/common/Loader';
-import JoinModal from '../components/common/JoinModal';
 import toast from 'react-hot-toast';
 
 const HomePage = () => {
-  const [showJoinModal, setShowJoinModal] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
   const { activities, loading: loadingActivities } = useActivities();
@@ -32,10 +30,6 @@ const HomePage = () => {
     const { data } = await announcementsService.getLatest(4);
     setAnnouncements(data || []);
     setLoadingAnnouncements(false);
-  };
-
-  const handleJoinSuccess = (email) => {
-    toast.success(`Application received! Check ${email} for updates.`);
   };
 
   const handleWhatsAppShare = (announcement) => {
@@ -67,10 +61,10 @@ const HomePage = () => {
               Join Feza Programming Club and embark on an exciting journey into the world of technology.
             </p>
             <button
-              onClick={() => setShowJoinModal(true)}
+              onClick={() => navigate('/student/login')}
               className="bg-secondary-500 text-primary-500 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-secondary-600 transition transform hover:scale-105 inline-flex items-center gap-2 shadow-lg"
             >
-              <span>Start Your Journey</span>
+              <span>Login to Your Account</span>
               <ArrowRightIcon className="w-5 h-5" />
             </button>
           </div>
@@ -294,72 +288,72 @@ const HomePage = () => {
         </div>
       </section>
 
-        {/* Feature Highlights */}
-        <section className="py-8 bg-gradient-to-r from-primary-50 to-secondary-50">
-          <div className="container-custom">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up">
-                <div className="flex items-center gap-3">
-                  <div className="bg-green-100 p-3 rounded-full animate-pulse">
-                    <FaGraduationCap className="text-green-600 text-xl" />
+      {/* Feature Highlights */}
+      <section className="py-8 bg-gradient-to-r from-primary-50 to-secondary-50">
+        <div className="container-custom">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up">
+              <div className="flex items-center gap-3">
+                <div className="bg-green-100 p-3 rounded-full animate-pulse">
+                  <FaGraduationCap className="text-green-600 text-xl" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+                    <span className="text-sm font-semibold text-gray-700">Curriculum</span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">NEW</span>
-                      <span className="text-sm font-semibold text-gray-700">Curriculum</span>
-                    </div>
-                    <p className="text-xs text-gray-500">100+ lessons</p>
-                  </div>
+                  <p className="text-xs text-gray-500">100+ lessons</p>
                 </div>
               </div>
-              
-              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-100">
-                <div className="flex items-center gap-3">
-                  <div className="bg-purple-100 p-3 rounded-full animate-pulse">
-                    <FaCode className="text-purple-600 text-xl" />
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-100">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-100 p-3 rounded-full animate-pulse">
+                  <FaCode className="text-purple-600 text-xl" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full">UPDATED</span>
+                    <span className="text-sm font-semibold text-gray-700">Python Lab</span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full">UPDATED</span>
-                      <span className="text-sm font-semibold text-gray-700">Python Lab</span>
-                    </div>
-                    <p className="text-xs text-gray-500">New editor features</p>
-                  </div>
+                  <p className="text-xs text-gray-500">New editor features</p>
                 </div>
               </div>
-              
-              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-200">
-                <div className="flex items-center gap-3">
-                  <div className="bg-orange-100 p-3 rounded-full animate-pulse">
-                    <FaTrophy className="text-orange-600 text-xl" />
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-200">
+              <div className="flex items-center gap-3">
+                <div className="bg-orange-100 p-3 rounded-full animate-pulse">
+                  <FaTrophy className="text-orange-600 text-xl" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+                    <span className="text-sm font-semibold text-gray-700">Challenges</span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">NEW</span>
-                      <span className="text-sm font-semibold text-gray-700">Challenges</span>
-                    </div>
-                    <p className="text-xs text-gray-500">Earn points & badges</p>
-                  </div>
+                  <p className="text-xs text-gray-500">Earn points & badges</p>
                 </div>
               </div>
-              
-              <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-300">
-                <div className="flex items-center gap-3">
-                  <div className="bg-blue-100 p-3 rounded-full animate-pulse">
-                    <FaUser className="text-blue-600 text-xl" />
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition transform hover:-translate-y-1 animate-fade-in-up delay-300">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-100 p-3 rounded-full animate-pulse">
+                  <FaUser className="text-blue-600 text-xl" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">NEW</span>
+                    <span className="text-sm font-semibold text-gray-700">Member Profiles</span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full">NEW</span>
-                      <span className="text-sm font-semibold text-gray-700">Member Profiles</span>
-                    </div>
-                    <p className="text-xs text-gray-500">Upload your photo</p>
-                  </div>
+                  <p className="text-xs text-gray-500">Upload your photo</p>
                 </div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
       {/* Latest Activities Section */}
       <section className="py-20 bg-white">
@@ -422,10 +416,10 @@ const HomePage = () => {
                   <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500 text-lg">No upcoming activities</p>
                   <button
-                    onClick={() => setShowJoinModal(true)}
+                    onClick={() => navigate('/student/login')}
                     className="text-secondary-500 mt-4 hover:underline"
                   >
-                    Join the club to get notified!
+                    Login to get notified!
                   </button>
                 </div>
               )}
@@ -437,26 +431,18 @@ const HomePage = () => {
       {/* Call to Action */}
       <section className="py-20 bg-primary-500">
         <div className="container-custom text-center">
-          <h2 className="text-4xl font-bold text-white mb-4">Ready to Start Coding?</h2>
+          <h2 className="text-4xl font-bold text-white mb-4">Already a Member?</h2>
           <p className="text-xl text-primary-100 mb-8 max-w-2xl mx-auto">
-            Join Feza Programming Club today and begin your journey into the world of technology.
+            Login to access coding challenges, track your progress, and connect with fellow members.
           </p>
           <button
-            onClick={() => setShowJoinModal(true)}
+            onClick={() => navigate('/student/login')}
             className="bg-secondary-500 text-primary-500 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-secondary-600 transition transform hover:scale-105 shadow-lg"
           >
-            Apply for Membership
+            Login to Your Account
           </button>
         </div>
       </section>
-
-      {/* Join Modal */}
-      {showJoinModal && (
-        <JoinModal
-          onClose={() => setShowJoinModal(false)}
-          onSuccess={handleJoinSuccess}
-        />
-      )}
     </div>
   );
 };

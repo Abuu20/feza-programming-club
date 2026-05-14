@@ -62,7 +62,7 @@ const Avatar = ({ name, url, size = 8 }) => {
 };
 
 // ── Message bubble ────────────────────────────────────────────
-const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete }) => {
+const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, isDM = false }) => {
   const [showEmoji, setShowEmoji] = useState(false);
   const isOwn = msg.user_id === currentUserId;
 
@@ -165,12 +165,15 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete }) => {
   // ── Other people: avatar + name on the left ───────────────
   return (
     <div className="group flex items-end gap-2 px-3 md:px-4 py-0.5">
-      <Avatar name={msg.display_name} url={msg.avatar_url} size={7} />
+      {!isDM && <Avatar name={msg.display_name} url={msg.avatar_url} size={7} />}
       <div className="flex-1 min-w-0 max-w-xs md:max-w-md lg:max-w-lg">
-        <div className="flex items-baseline gap-2 mb-0.5 ml-1">
-          <span className="font-semibold text-xs text-gray-600">{msg.display_name}</span>
-          <span className="text-xs text-gray-400">{timeStr}</span>
-        </div>
+        {!isDM && (
+          <div className="flex items-baseline gap-2 mb-0.5 ml-1">
+            <span className="font-semibold text-xs text-gray-600">{msg.display_name}</span>
+            <span className="text-xs text-gray-400">{timeStr}</span>
+          </div>
+        )}
+        {isDM && <div className="flex justify-start mb-0.5 ml-1"><span className="text-xs text-gray-400">{timeStr}</span></div>}
 
         {msg.reply_to_id && msg.reply_preview && (
           <div className="border-l-2 border-gray-300 pl-2 mb-1 text-xs text-gray-500 truncate ml-1">
@@ -761,7 +764,7 @@ const ChatPage = () => {
                   onReact={handleReact}
                   onReply={setReplyTo}
                   onDelete={handleDelete}
-                  members={members}
+                  isDM={!!activeDM}
                 />
               </React.Fragment>
             );

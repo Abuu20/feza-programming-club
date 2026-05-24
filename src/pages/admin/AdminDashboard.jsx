@@ -12,7 +12,6 @@ import {
   FaTimesCircle
 } from 'react-icons/fa';
 import { supabase } from '../../services/supabase';
-import { membershipService } from '../../services/membership';
 import { formatDate } from '../../utils/helpers';
 
 const AdminDashboard = () => {
@@ -44,7 +43,7 @@ const AdminDashboard = () => {
         supabase.from('members').select('*', { count: 'exact', head: true }),
         supabase.from('gallery').select('*', { count: 'exact', head: true }),
         supabase.from('messages').select('*', { count: 'exact', head: true }),
-        membershipService.getAllApplications()
+        supabase.from('registration_requests').select('*')
       ]);
 
       const apps = applications.data || [];
@@ -70,9 +69,12 @@ const AdminDashboard = () => {
 
   const fetchRecentData = async () => {
     try {
-      // Get recent applications
-      const { data: apps } = await membershipService.getAllApplications();
-      setRecentApplications(apps?.slice(0, 5) || []);
+      const { data: apps } = await supabase
+        .from('registration_requests')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setRecentApplications(apps || []);
 
       // Get recent messages
       const { data: messages } = await supabase

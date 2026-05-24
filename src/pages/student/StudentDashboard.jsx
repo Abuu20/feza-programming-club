@@ -20,20 +20,24 @@ import {
   FaCamera
 } from 'react-icons/fa';
 import Loader from '../../components/common/Loader';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const StudentDashboard = () => {
   const { user } = useAuth();
+  const { permissions, can } = usePermissions();
   const [stats, setStats] = useState(null);
   const [recentChallenges, setRecentChallenges] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [curriculumProgress, setCurriculumProgress] = useState({ completed: 0, total: 0 });
 
   useEffect(() => {
     if (user) {
       fetchData();
       fetchProfile();
       fetchRecentActivity();
+      fetchCurriculumProgress();
     }
   }, [user]);
 
@@ -66,6 +70,17 @@ const StudentDashboard = () => {
     }
   };
 
+  const fetchCurriculumProgress = async () => {
+    try {
+      const [{ count: completed }, { count: total }] = await Promise.all([
+        supabase.from('user_curriculum_progress').select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id).eq('status', 'completed'),
+        supabase.from('curriculum').select('*', { count: 'exact', head: true }).eq('is_published', true),
+      ]);
+      setCurriculumProgress({ completed: completed || 0, total: total || 0 });
+    } catch (e) { console.error(e); }
+  };
+
   const fetchRecentActivity = async () => {
     try {
       const { data } = await supabase
@@ -86,6 +101,51 @@ const StudentDashboard = () => {
   const getDefaultAvatar = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=002B5C&color=fff&size=128`;
   };
+
+  // Permission-based feature cards shown on dashboard
+  const PERMISSION_FEATURES = [
+    {
+      key: 'gallery_upload',
+      icon: '🖼️',
+      label: 'Gallery Manager',
+      description: 'You can upload and manage photos and videos in the club gallery.',
+      link: '/gallery',
+      linkLabel: 'Go to Gallery',
+      color: 'from-purple-500 to-purple-600',
+    },
+    {
+      key: 'announcements',
+      icon: '📢',
+      label: 'Announcements',
+      description: 'You can post announcements visible to all club members.',
+      link: '/announcements',
+      linkLabel: 'Go to Announcements',
+      color: 'from-blue-500 to-blue-600',
+    },
+    {
+      key: 'curriculum_edit',
+      icon: '📚',
+      label: 'Curriculum Editor',
+      description: 'You can create and edit lessons in the club curriculum.',
+      link: '/admin/curriculum',
+      linkLabel: 'Edit Curriculum',
+      color: 'from-green-500 to-green-600',
+    },
+    {
+      key: 'challenges_edit',
+      icon: '🏆',
+      label: 'Challenge Editor',
+      description: 'You can create and manage coding challenges for members.',
+      link: '/admin/challenges',
+      linkLabel: 'Manage Challenges',
+      color: 'from-yellow-500 to-yellow-600',
+    },
+  ];
+
+  const myFeatures = PERMISSION_FEATURES.filter(f => can(f.key));
+  const progressPct = curriculumProgress.total > 0
+    ? Math.round((curriculumProgress.completed / curriculumProgress.total) * 100)
+    : 0;
 
   if (loading) return <Loader />;
 
@@ -201,6 +261,54 @@ const StudentDashboard = () => {
           <p className="text-3xl font-bold">{stats?.success_rate || 0}%</p>
         </div>
       </div>
+
+      {/* Curriculum Progress Bar */}
+      {curriculumProgress.total > 0 && (
+        <div className="bg-white rounded-xl shadow-md p-5 mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <FaChartLine className="text-orange-500" /> Curriculum Progress
+            </h3>
+            <span className="text-sm text-gray-500">
+              {curriculumProgress.completed} / {curriculumProgress.total} lessons
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="bg-gradient-to-r from-orange-400 to-orange-600 h-3 rounded-full transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-xs text-gray-500">{progressPct}% complete</span>
+            <Link to="/curriculum" className="text-xs text-primary-600 hover:text-primary-700 font-medium">
+              Continue Learning →
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Special Permissions — only shown if member has been granted any */}
+      {myFeatures.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+            🛡️ Your Special Access
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {myFeatures.map(f => (
+              <Link key={f.key} to={f.link}
+                className={`bg-gradient-to-r ${f.color} text-white p-5 rounded-xl hover:shadow-lg transition group`}>
+                <div className="text-3xl mb-2">{f.icon}</div>
+                <h3 className="font-bold text-lg">{f.label}</h3>
+                <p className="text-sm opacity-90 mt-1 mb-3">{f.description}</p>
+                <span className="inline-flex items-center gap-1 text-sm font-semibold bg-white bg-opacity-20 px-3 py-1 rounded-full group-hover:bg-opacity-30 transition">
+                  {f.linkLabel} →
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Activity */}

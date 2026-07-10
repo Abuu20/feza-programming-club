@@ -33,6 +33,7 @@ import StudentRegister from './pages/student/StudentRegister';
 import StudentDashboard from './pages/student/StudentDashboard';
 import RegistrationRequest from './pages/student/RegistrationRequest';
 import MemberProfile from './pages/student/MemberProfile';
+import MembersManagePage from './pages/student/MembersManagePage';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -87,6 +88,8 @@ function App() {
               <Route element={<PublicLayout />}>
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
                 <Route path="/student/profile" element={<MemberProfile />} />
+                <Route path="/student/members-manage" element={<MembersManagePage />} />  
+
               </Route>
             </Route>
 

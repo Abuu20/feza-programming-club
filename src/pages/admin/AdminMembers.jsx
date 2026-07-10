@@ -37,6 +37,13 @@ const ALL_PERMISSIONS = [
     icon: '🏆',
     color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   },
+  {
+    key: 'members_manage',
+    label: 'Members Manager',
+    description: 'Can remove members from the club (cannot remove admin or yourself)',
+    icon: '👥',
+    color: 'bg-red-100 text-red-800 border-red-200',
+  },
 ];
 
 // ── Permission badge shown in the members table ───────────────────────────────

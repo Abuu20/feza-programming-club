@@ -140,6 +140,15 @@ const StudentDashboard = () => {
       linkLabel: 'Manage Challenges',
       color: 'from-yellow-500 to-yellow-600',
     },
+    {
+      key: 'members_manage',
+      icon: '👥',
+      label: 'Members Manager',
+      description: 'You can remove inactive or non-participating members from the club.',
+      link: '/student/members-manage',
+      linkLabel: 'Manage Members',
+      color: 'from-red-500 to-red-600',
+    },
   ];
 
   const myFeatures = PERMISSION_FEATURES.filter(f => can(f.key));

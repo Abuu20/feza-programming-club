@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { FaEnvelope, FaLock, FaCode } from 'react-icons/fa';
 import toast from 'react-hot-toast';
@@ -9,38 +9,73 @@ const StudentLogin = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const urlError = new URLSearchParams(location.search).get('error');
+  const errorMessages = {
+    pending:  'Your account is still pending admin approval. Please wait.',
+    rejected: 'Your registration was not approved. Contact the club admin.',
+    inactive: 'Your membership has been deactivated. Contact the club admin.',
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Check registration request status BEFORE logging in
+      // ── Step 1: Check approval BEFORE creating a session ─────────────
       const { data: request } = await supabase
         .from('registration_requests')
         .select('status')
-        .eq('email', email)
+        .eq('email', email.trim().toLowerCase())
         .maybeSingle();
 
-      if (request && request.status === 'pending') {
-        toast.error('Your account is pending admin approval. Please wait.');
-        setLoading(false);
-        return;
+      if (request) {
+        if (request.status === 'pending') {
+          toast.error(
+            'Your account is pending admin approval. You will be notified once approved.',
+            { duration: 6000 }
+          );
+          setLoading(false);
+          return;
+        }
+        if (request.status === 'rejected') {
+          toast.error(
+            'Your registration was not approved. Please contact the club admin.',
+            { duration: 6000 }
+          );
+          setLoading(false);
+          return;
+        }
       }
 
-      if (request && request.status === 'rejected') {
-        toast.error('Your registration request was not approved. Contact the club admin.');
-        setLoading(false);
-        return;
-      }
-
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // ── Step 2: Sign in ───────────────────────────────────────────────
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
       if (error) throw error;
 
-      toast.success('Login successful!');
+      // ── Step 3: Check if member was deactivated (removed by manager) ──
+      const { data: member } = await supabase
+        .from('members')
+        .select('status')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+
+      if (member && member.status === 'inactive') {
+        await supabase.auth.signOut();
+        toast.error(
+          'Your membership has been deactivated. Please contact the club admin.',
+          { duration: 6000 }
+        );
+        setLoading(false);
+        return;
+      }
+
+      toast.success('Welcome back! 🎉');
       navigate('/student/dashboard');
     } catch (error) {
-      toast.error(error.message || 'Login failed');
+      toast.error(error.message || 'Login failed. Check your email and password.');
     } finally {
       setLoading(false);
     }
@@ -57,6 +92,12 @@ const StudentLogin = () => {
           <p className="text-gray-600 mt-2">Access your coding challenges and track your progress</p>
         </div>
 
+        {urlError && errorMessages[urlError] && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            🔒 {errorMessages[urlError]}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
@@ -64,7 +105,8 @@ const StudentLogin = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaEnvelope className="h-5 w-5 text-gray-400" />
               </div>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              <input type="email" value={email}
+                onChange={e => setEmail(e.target.value)}
                 required className="input-field pl-10" placeholder="your@email.com" />
             </div>
           </div>
@@ -75,19 +117,22 @@ const StudentLogin = () => {
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FaLock className="h-5 w-5 text-gray-400" />
               </div>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              <input type="password" value={password}
+                onChange={e => setPassword(e.target.value)}
                 required className="input-field pl-10" placeholder="••••••••" />
             </div>
           </div>
 
           <button type="submit" disabled={loading} className="w-full btn-primary py-3">
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? 'Checking approval...' : 'Sign in'}
           </button>
 
-          <div className="text-center">
-            <Link to="/student/request" className="text-primary-600 hover:text-primary-500 text-sm">
-              Don't have an account? Request to join
-            </Link>
+          <div className="text-center space-y-2">
+            <div>
+              <Link to="/student/request" className="text-primary-600 hover:text-primary-500 text-sm">
+                Don't have an account? Request to join
+              </Link>
+            </div>
           </div>
         </form>
       </div>

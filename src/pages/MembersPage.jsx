@@ -16,13 +16,17 @@ const MembersPage = () => {
 
   const fetchMembers = async () => {
     const { data } = await membersService.getAll();
-    setMembers(data || []);
+    // Only show active members publicly
+    setMembers((data || []).filter(m => m.status !== 'inactive'));
     setLoading(false);
   };
 
-  const filteredMembers = filter === 'all' 
-    ? members 
-    : members.filter(m => m.role?.toLowerCase() === filter);
+  const filteredMembers = members.filter(m => {
+    // Never show inactive/removed members on the public page
+    if (m.status === 'inactive') return false;
+    if (filter === 'all') return true;
+    return m.role?.toLowerCase() === filter;
+  });
 
   const getDefaultAvatar = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=002B5C&color=fff&size=200`;

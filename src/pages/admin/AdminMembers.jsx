@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaEdit, FaTrash, FaPlus, FaKey, FaSpinner, FaShieldAlt, FaTimes, FaCheck } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaKey, FaSpinner, FaShieldAlt, FaTimes, FaCheck, FaUndo, FaBan } from 'react-icons/fa';
 import { membersService } from '../../services/members';
 import { supabase } from '../../services/supabase';
 import Loader from '../../components/common/Loader';
@@ -157,6 +157,26 @@ const PermissionsModal = ({ member, onClose, onSaved }) => {
   );
 };
 
+// ── Styled confirmation modal — replaces ugly window.confirm ─────────────────
+const ConfirmModal = ({ title, message, confirmLabel = 'Confirm', confirmColor = 'bg-red-600 hover:bg-red-700', onConfirm, onCancel }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fadeIn">
+      <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-600 text-sm whitespace-pre-line mb-6">{message}</p>
+      <div className="flex gap-3">
+        <button onClick={onCancel}
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
+          Cancel
+        </button>
+        <button onClick={onConfirm}
+          className={`flex-1 px-4 py-2 rounded-lg text-white transition text-sm font-medium ${confirmColor}`}>
+          {confirmLabel}
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // ── Main AdminMembers ─────────────────────────────────────────────────────────
 const AdminMembers = () => {
   const [members, setMembers] = useState([]);
@@ -166,6 +186,14 @@ const AdminMembers = () => {
   const [permissionsMember, setPermissionsMember] = useState(null);
   const [sendingEmail, setSendingEmail] = useState(null);
   const [search, setSearch] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+  const [restoring, setRestoring] = useState(null);
+  const [deletingAuth, setDeletingAuth] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null); // { title, message, confirmLabel, confirmColor, onConfirm }
+
+  const showConfirm = ({ title, message, confirmLabel = 'Confirm', confirmColor = 'bg-red-600 hover:bg-red-700', onConfirm }) => {
+    setConfirmModal({ title, message, confirmLabel, confirmColor, onConfirm });
+  };
 
   const getBaseUrl = () =>
     process.env.NODE_ENV === 'production'
@@ -185,10 +213,17 @@ const AdminMembers = () => {
 
   const handleEdit = (member) => { setEditingMember(member); setShowForm(true); };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this member?')) return;
-    const { error } = await membersService.delete(id);
-    if (!error) { toast.success('Member deleted'); fetchMembers(); }
+  const handleDelete = (id, name) => {
+    showConfirm({
+      title: 'Delete Member',
+      message: `Are you sure you want to delete ${name}?\nThis removes them from the members table only.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        const { error } = await membersService.delete(id);
+        if (!error) { toast.success('Member deleted'); fetchMembers(); }
+      }
+    });
   };
 
   const handleResetPassword = async (member) => {
@@ -214,12 +249,111 @@ const AdminMembers = () => {
     ));
   };
 
+  const handleRestore = (member) => {
+    showConfirm({
+      title: 'Restore Member',
+      message: `Restore ${member.name} back to the club?\nThey will be able to log in again immediately.`,
+      confirmLabel: 'Restore',
+      confirmColor: 'bg-green-600 hover:bg-green-700',
+      onConfirm: () => { setConfirmModal(null); doRestore(member); }
+    });
+  };
+
+  const doRestore = async (member) => {
+    setRestoring(member.id);
+    setRestoring(member.id);
+    try {
+      const { error: memberError } = await supabase
+        .from('members')
+        .update({ status: 'active' })
+        .eq('id', member.id);
+      if (memberError) throw memberError;
+
+      if (member.email) {
+        await supabase
+          .from('registration_requests')
+          .update({ status: 'approved', admin_notes: 'Restored by admin' })
+          .eq('email', member.email);
+      }
+
+      toast.success(`${member.name} has been restored to the club`);
+      fetchMembers();
+    } catch (err) {
+      toast.error('Failed to restore member: ' + err.message);
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  const handleDeleteFromAuth = async (member) => {
+    if (!member.user_id) {
+      showConfirm({
+        title: 'Delete Member',
+        message: `Permanently delete ${member.name}?\nThis cannot be undone.`,
+        confirmLabel: 'Delete Permanently',
+        onConfirm: async () => {
+          setConfirmModal(null);
+          await membersService.delete(member.id);
+          toast.success(`${member.name} permanently deleted`);
+          fetchMembers();
+        }
+      });
+      return;
+    }
+
+    showConfirm({
+      title: `⚠️ Permanently Delete ${member.name}`,
+      message: `This will permanently remove them from:\n• auth.users (login account deleted)\n• Members table\n• Registration requests\n\nThis CANNOT be undone. Are you sure?`,
+      confirmLabel: 'Delete Forever',
+      confirmColor: 'bg-red-700 hover:bg-red-800',
+      onConfirm: () => { setConfirmModal(null); doDeleteFromAuth(member); }
+    });
+  };
+
+  const doDeleteFromAuth = async (member) => {
+
+    setDeletingAuth(member.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const supabaseUrl = supabase.supabaseUrl;
+      const anonKey = supabase.supabaseKey;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/delete-auth-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': anonKey,
+        },
+        body: JSON.stringify({
+          user_id: member.user_id,
+          member_id: member.id,
+          email: member.email,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Delete failed');
+
+      toast.success(`${member.name} permanently deleted from the system`);
+      fetchMembers();
+    } catch (err) {
+      toast.error('Delete failed: ' + err.message);
+    } finally {
+      setDeletingAuth(null);
+    }
+  };
+
   const handleCloseForm = () => { setShowForm(false); setEditingMember(null); fetchMembers(); };
 
-  const filtered = members.filter(m =>
-    m.name?.toLowerCase().includes(search.toLowerCase()) ||
-    m.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = members.filter(m => {
+    if (!showInactive && m.status === 'inactive') return false;
+    return (
+      m.name?.toLowerCase().includes(search.toLowerCase()) ||
+      m.email?.toLowerCase().includes(search.toLowerCase())
+    );
+  });
+  const inactiveCount = members.filter(m => m.status === 'inactive').length;
 
   if (loading) return <Loader />;
 
@@ -235,13 +369,20 @@ const AdminMembers = () => {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
+      {/* Search + inactive toggle */}
+      <div className="mb-4 flex items-center gap-3 flex-wrap">
         <input
           type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search by name or email..."
           className="input-field max-w-sm"
         />
+        <button
+          onClick={() => setShowInactive(p => !p)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition
+            ${showInactive ? 'bg-orange-100 border-orange-300 text-orange-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+          <FaUndo size={12} />
+          {showInactive ? 'Hiding removed members' : `Show removed members ${inactiveCount > 0 ? `(${inactiveCount})` : ''}`}
+        </button>
       </div>
 
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -260,7 +401,7 @@ const AdminMembers = () => {
               {filtered.map((member) => {
                 const perms = Array.isArray(member.permissions) ? member.permissions : [];
                 return (
-                  <tr key={member.id} className="hover:bg-gray-50">
+                  <tr key={member.id} className={`hover:bg-gray-50 ${member.status === 'inactive' ? 'bg-red-50 opacity-75' : ''}`}>
                     {/* Member info */}
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
@@ -327,12 +468,37 @@ const AdminMembers = () => {
                           title="Edit Member">
                           <FaEdit size={15} />
                         </button>
+                        {/* Restore — only shown for inactive members */}
+                        {member.status === 'inactive' && (
+                          <>
+                            <button
+                              onClick={() => handleRestore(member)}
+                              disabled={restoring === member.id}
+                              className="p-1.5 text-green-600 hover:text-green-900 hover:bg-green-50 rounded transition disabled:opacity-50"
+                              title="Restore member access">
+                              {restoring === member.id
+                                ? <FaSpinner className="animate-spin" size={15} />
+                                : <FaUndo size={15} />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteFromAuth(member)}
+                              disabled={deletingAuth === member.id}
+                              className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition disabled:opacity-50"
+                              title="Permanently delete from system (removes auth account)">
+                              {deletingAuth === member.id
+                                ? <FaSpinner className="animate-spin" size={15} />
+                                : <FaBan size={15} />}
+                            </button>
+                          </>
+                        )}
                         {/* Delete */}
-                        <button onClick={() => handleDelete(member.id)}
-                          className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition"
-                          title="Delete Member">
-                          <FaTrash size={15} />
-                        </button>
+                        {member.status !== 'inactive' && (
+                          <button onClick={() => handleDelete(member.id, member.name)}
+                            className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition"
+                            title="Delete Member">
+                            <FaTrash size={15} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -358,6 +524,18 @@ const AdminMembers = () => {
       {/* Member form modal */}
       {showForm && (
         <MemberForm member={editingMember} onClose={handleCloseForm} />
+      )}
+
+      {/* Styled confirm modal */}
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          confirmColor={confirmModal.confirmColor}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
       )}
 
       {/* Permissions modal */}

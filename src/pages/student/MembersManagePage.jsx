@@ -9,6 +9,20 @@ import toast from 'react-hot-toast';
 
 const ADMIN_EMAIL = 'fezaclub@gmail.com';
 
+// ── Styled confirm modal ─────────────────────────────────────────────────────
+const ConfirmModal = ({ title, message, confirmLabel='Confirm', confirmColor='bg-red-600 hover:bg-red-700', onConfirm, onCancel }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
+      <p className="text-gray-600 text-sm whitespace-pre-line mb-6">{message}</p>
+      <div className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm">Cancel</button>
+        <button onClick={onConfirm} className={`flex-1 px-4 py-2 rounded-lg text-white transition text-sm font-medium ${confirmColor}`}>{confirmLabel}</button>
+      </div>
+    </div>
+  </div>
+);
+
 const MembersManagePage = () => {
   const { user } = useAuth();
   const { can, loading: permLoading } = usePermissions();
@@ -17,6 +31,7 @@ const MembersManagePage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [removing, setRemoving] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   useEffect(() => {
     if (!permLoading && !can('members_manage')) {
@@ -49,11 +64,15 @@ const MembersManagePage = () => {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Remove ${member.name} from the club?\n\nThey will be blocked from logging in immediately.`
-    );
-    if (!confirmed) return;
+    setConfirmModal({
+      title: `Remove ${member.name}?`,
+      message: `They will be blocked from logging in immediately.\nThe admin can restore them later if needed.`,
+      confirmLabel: 'Remove Member',
+      onConfirm: () => { setConfirmModal(null); doRemove(member); }
+    });
+  };
 
+  const doRemove = async (member) => {
     setRemoving(member.id);
     try {
       // 1. Set member status to inactive — StudentPrivateRoute blocks on this
@@ -187,6 +206,16 @@ const MembersManagePage = () => {
           </div>
         )}
       </div>
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          confirmColor={confirmModal.confirmColor || 'bg-red-600 hover:bg-red-700'}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   );
 };

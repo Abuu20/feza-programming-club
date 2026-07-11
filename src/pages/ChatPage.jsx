@@ -724,7 +724,20 @@ const ChatPage = () => {
 
   // ── Remove DM thread ───────────────────────────────────────
   const removeDM = async (threadId) => {
-    if (!window.confirm('Remove this conversation from your list?')) return;
+    const confirmed = await new Promise(resolve => {
+      toast((t) => (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">Remove this conversation?</p>
+          <div className="flex gap-2">
+            <button onClick={() => { toast.dismiss(t.id); resolve(true); }}
+              className="px-3 py-1 bg-red-500 text-white text-xs rounded">Remove</button>
+            <button onClick={() => { toast.dismiss(t.id); resolve(false); }}
+              className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded">Cancel</button>
+          </div>
+        </div>
+      ), { duration: 10000 });
+    });
+    if (!confirmed) return;
     await supabase.from('dm_threads').delete().eq('id', threadId);
     setDmThreads(prev => prev.filter(t => t.id !== threadId));
     if (activeDM?.thread_id === threadId) { setActiveDM(null); setActiveChannel(channels[0] || null); }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
+import {
   CodeBracketIcon,
   HomeIcon,
   CalendarIcon,
@@ -13,6 +13,7 @@ import {
   ArrowRightOnRectangleIcon,
   UserPlusIcon,
   ChatBubbleLeftRightIcon,
+  Bars3Icon,
 } from '@heroicons/react/24/outline';
 import { FaBookOpen, FaTrophy } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
@@ -23,35 +24,27 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
 
-  // Firefox-compatible unread count listener
+  // Unread count logic (unchanged)
   useEffect(() => {
-    // Handler for custom events from ChatPage
     const handleUnreadUpdate = (event) => {
-      console.log('Navbar received unread update:', event.detail?.total);
       const total = event.detail?.total || 0;
       setChatUnread(total);
-      
-      // Store in sessionStorage for Firefox persistence
       try {
         sessionStorage.setItem('feza-chat-unread-total', total.toString());
       } catch (e) {}
     };
-    
-    // Listen for the custom event
+
     window.addEventListener('feza-chat-unread', handleUnreadUpdate);
-    
-    // Firefox fallback: Also check localStorage directly for unread counts
+
     const checkLocalStorageForUnread = () => {
       try {
         const savedCounts = localStorage.getItem('feza-unread-counts');
         if (savedCounts) {
           const counts = JSON.parse(savedCounts);
           const total = Object.values(counts).reduce((a, b) => a + b, 0);
-          console.log('Navbar loaded from localStorage:', total);
           setChatUnread(total);
           sessionStorage.setItem('feza-chat-unread-total', total.toString());
         } else {
-          // Check sessionStorage as backup
           const sessionTotal = sessionStorage.getItem('feza-chat-unread-total');
           if (sessionTotal) {
             setChatUnread(parseInt(sessionTotal, 10));
@@ -59,24 +52,19 @@ const Navbar = () => {
         }
       } catch (e) {}
     };
-    
-    // Initial load
+
     checkLocalStorageForUnread();
-    
-    // Listen for storage events (for cross-tab sync in Firefox)
+
     const handleStorageChange = (e) => {
       if (e.key === 'feza-unread-counts') {
         checkLocalStorageForUnread();
       }
     };
-    
+
     window.addEventListener('storage', handleStorageChange);
-    
-    // Firefox: Also check periodically as backup (every 2 seconds)
-    const intervalId = setInterval(() => {
-      checkLocalStorageForUnread();
-    }, 2000);
-    
+
+    const intervalId = setInterval(checkLocalStorageForUnread, 2000);
+
     return () => {
       window.removeEventListener('feza-chat-unread', handleUnreadUpdate);
       window.removeEventListener('storage', handleStorageChange);
@@ -89,7 +77,6 @@ const Navbar = () => {
     navigate('/');
   };
 
-  // Check if user is admin (based on email)
   const isAdmin = user?.email === 'fezaclub@gmail.com';
 
   const navLinks = [
@@ -109,7 +96,7 @@ const Navbar = () => {
     <nav className="bg-primary-500 text-white shadow-lg sticky top-0 z-50">
       <div className="container-custom">
         <div className="flex justify-between items-center h-16">
-          {/* Logo - Shortened for better fit */}
+          {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group flex-shrink-0">
             <div className="bg-secondary-500 p-2 rounded-lg transform group-hover:rotate-12 transition">
               <CodeBracketIcon className="w-5 h-5 text-primary-500" />
@@ -119,40 +106,105 @@ const Navbar = () => {
             </span>
           </Link>
 
-          {/* Desktop Navigation - Scrollable if needed */}
-          <div className="hidden lg:flex items-center space-x-1 overflow-x-auto">
-            {/* Chat with unread badge - Firefox optimized */}
-            <Link to="/chat"
-              className="relative px-3 py-2 rounded-lg hover:bg-primary-600 transition flex items-center gap-2 text-sm whitespace-nowrap"
-              onClick={() => {
-                // Reset unread when clicking on chat
-                setChatUnread(0);
-                try {
-                  sessionStorage.setItem('feza-chat-unread-total', '0');
-                } catch (e) {}
-              }}>
-              <ChatBubbleLeftRightIcon className="w-4 h-4" />
-              <span>Chat</span>
-              {chatUnread > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 animate-pulse">
-                  {chatUnread > 99 ? '99+' : chatUnread}
+          {/* Desktop Navigation – Animated Boxed Panel */}
+          <div className="hidden lg:flex items-center gap-4">
+            <div className="relative group">
+              {/* Main "Explore" Button – now with its own badge */}
+              <button className="px-4 py-2 rounded-lg hover:bg-primary-600 transition flex items-center gap-2 text-sm font-medium">
+                <span className="relative inline-flex">
+                  <Bars3Icon className="w-5 h-5" />
+                  {/* Badge on the main button */}
+                  {chatUnread > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-md ring-2 ring-primary-500">
+                      {chatUnread > 99 ? '99+' : chatUnread}
+                    </span>
+                  )}
                 </span>
-              )}
-            </Link>
-            {navLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className="px-3 py-2 rounded-lg hover:bg-primary-600 transition flex items-center gap-2 text-sm whitespace-nowrap"
-              >
-                <link.icon className="w-4 h-4" />
-                <span>{link.label}</span>
-              </Link>
-            ))}
+                <span>Explore</span>
+              </button>
 
-            {/* User Menu */}
+              {/* The boxed panel – unchanged, still contains the Chat link with badge */}
+              <div className="absolute left-1/2 -translate-x-1/2 mt-3 w-[900px] max-w-[95vw] 
+                            bg-white/90 backdrop-blur-md text-gray-800 
+                            rounded-2xl shadow-2xl border border-primary-200/60 
+                            p-6 z-50 
+                            transition-all duration-300 ease-out 
+                            origin-top 
+                            opacity-0 scale-95 invisible 
+                            group-hover:opacity-100 group-hover:scale-100 group-hover:visible 
+                            group-hover:transition-all group-hover:duration-300 group-hover:ease-out">
+                
+                {/* Decorative header */}
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-primary-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-6 bg-gradient-to-b from-secondary-500 to-primary-500 rounded-full"></div>
+                    <span className="font-bold text-primary-600 text-sm tracking-wide">
+                      ✦ Explore Feza Code Club
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400 font-medium">
+                    {navLinks.length + 1} pages
+                  </span>
+                </div>
+
+                {/* 4‑column grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {/* Chat link with badge (inside panel) */}
+                  <Link
+                    to="/chat"
+                    onClick={() => {
+                      setChatUnread(0);
+                      try {
+                        sessionStorage.setItem('feza-chat-unread-total', '0');
+                      } catch (e) {}
+                    }}
+                    className="group/link flex items-center gap-3 px-3 py-3 rounded-xl 
+                               bg-gray-50/50 hover:bg-primary-50 
+                               transition-all duration-200 
+                               hover:shadow-md hover:-translate-y-0.5 
+                               border border-transparent hover:border-primary-200"
+                  >
+                    <div className="p-2 rounded-lg bg-primary-100 text-primary-600 
+                                    group-hover/link:bg-primary-200 group-hover/link:scale-110 
+                                    transition-all duration-200">
+                      <ChatBubbleLeftRightIcon className="w-5 h-5" />
+                    </div>
+                    <span className="font-medium text-sm">Chat</span>
+                    {chatUnread > 0 && (
+                      <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1">
+                        {chatUnread > 99 ? '99+' : chatUnread}
+                      </span>
+                    )}
+                  </Link>
+
+                  {/* All other nav links */}
+                  {navLinks.map((link) => (
+                    <Link
+                      key={link.path}
+                      to={link.path}
+                      className="group/link flex items-center gap-3 px-3 py-3 rounded-xl 
+                                 bg-gray-50/50 hover:bg-primary-50 
+                                 transition-all duration-200 
+                                 hover:shadow-md hover:-translate-y-0.5 
+                                 border border-transparent hover:border-primary-200"
+                    >
+                      <div className="p-2 rounded-lg bg-primary-100 text-primary-600 
+                                      group-hover/link:bg-primary-200 group-hover/link:scale-110 
+                                      transition-all duration-200">
+                        <link.icon className="w-5 h-5" />
+                      </div>
+                      <span className="font-medium text-sm">{link.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop User Menu – unchanged */}
+          <div className="hidden lg:flex items-center gap-2">
             {user ? (
-              <div className="flex items-center gap-2 ml-4 pl-4 border-l border-primary-400">
+              <>
                 {isAdmin ? (
                   <Link
                     to="/admin"
@@ -177,9 +229,9 @@ const Navbar = () => {
                   <ArrowRightOnRectangleIcon className="w-4 h-4" />
                   <span className="hidden xl:inline">Logout</span>
                 </button>
-              </div>
+              </>
             ) : (
-              <div className="flex items-center gap-2 ml-4 pl-4 border-l border-primary-400">
+              <>
                 <Link
                   to="/student/login"
                   className="hover:bg-primary-600 px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap"
@@ -194,11 +246,11 @@ const Navbar = () => {
                   <UserPlusIcon className="w-4 h-4" />
                   <span>Join</span>
                 </Link>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button – unchanged */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="lg:hidden p-2 rounded-lg hover:bg-primary-600 transition"
@@ -213,11 +265,11 @@ const Navbar = () => {
           </button>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Menu – unchanged */}
         {isMenuOpen && (
           <div className="lg:hidden py-4 border-t border-primary-400">
-            {/* Chat with unread badge — mobile */}
-            <Link to="/chat"
+            <Link
+              to="/chat"
               onClick={() => {
                 setIsMenuOpen(false);
                 setChatUnread(0);
@@ -225,7 +277,8 @@ const Navbar = () => {
                   sessionStorage.setItem('feza-chat-unread-total', '0');
                 } catch (e) {}
               }}
-              className="relative flex items-center gap-3 px-4 py-3 hover:bg-primary-600 transition rounded-lg mb-1">
+              className="relative flex items-center gap-3 px-4 py-3 hover:bg-primary-600 transition rounded-lg mb-1"
+            >
               <ChatBubbleLeftRightIcon className="w-5 h-5" />
               <span>Chat</span>
               {chatUnread > 0 && (
@@ -245,7 +298,7 @@ const Navbar = () => {
                 <span>{link.label}</span>
               </Link>
             ))}
-            
+
             <div className="mt-4 pt-4 border-t border-primary-400">
               {user ? (
                 <>

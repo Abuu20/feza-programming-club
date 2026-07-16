@@ -3,9 +3,11 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 import {
   FaTrophy, FaClock, FaCheck, FaTimes, FaFire, FaMedal,
-  FaStar, FaLock, FaSpinner, FaUsers, FaBolt, FaChartBar
+  FaStar, FaLock, FaSpinner, FaUsers, FaBolt, FaChartBar,
+  FaTimesCircle   // for close button
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
@@ -46,16 +48,16 @@ const QuizPage = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState({}); // { questionId: 'A'|'B'|'C'|'D' }
-  const [submitted, setSubmitted] = useState({}); // { questionId: true }
-  const [results, setResults] = useState({}); // { questionId: { correct, pointsEarned } }
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState({});
+  const [results, setResults] = useState({});
   const [leaderboard, setLeaderboard] = useState([]);
   const [timeLeft, setTimeLeft] = useState(null);
-  const [phase, setPhase] = useState('lobby'); // lobby | active | ended | results
+  const [phase, setPhase] = useState('lobby');
   const [loading, setLoading] = useState(true);
   const [newLeaderEntry, setNewLeaderEntry] = useState(null);
   const [myScore, setMyScore] = useState({ points: 0, correct: 0 });
-  const [showExplanation, setShowExplanation] = useState({});
+  const [zoomedImage, setZoomedImage] = useState(null); // NEW for zoom
 
   const timerRef = useRef(null);
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student';
@@ -78,7 +80,6 @@ const QuizPage = () => {
       .limit(10);
     setSessions(data || []);
     setLoading(false);
-    // Auto-join active session
     const active = (data || []).find(s => s.status === 'active');
     if (active && (!activeSession || activeSession.id !== active.id)) {
       joinSession(active);
@@ -179,7 +180,6 @@ const QuizPage = () => {
     const isCorrect = answer === question.correct_answer;
     const pointsEarned = isCorrect ? question.points : 0;
 
-    // Optimistic UI
     setSubmitted(p => ({ ...p, [question.id]: true }));
     setResults(p => ({ ...p, [question.id]: { correct: isCorrect, pointsEarned, correctAnswer: question.correct_answer } }));
     setMyScore(p => ({
@@ -208,7 +208,6 @@ const QuizPage = () => {
       }
     }
 
-    // Auto-advance after 1.5s
     if (currentQ < questions.length - 1) {
       setTimeout(() => setCurrentQ(p => p + 1), 1500);
     }
@@ -327,18 +326,22 @@ const QuizPage = () => {
                       </span>
                     </div>
 
-                    {/* Question content */}
+                    {/* Question content – with zoomable image */}
                     {q.type === 'image' && q.question_image_url ? (
                       <div>
                         <p className="text-white font-semibold mb-3 text-lg">{q.question_text}</p>
                         <img
                           src={q.question_image_url}
                           alt="Question"
-                          className="w-full rounded-2xl max-h-64 object-contain bg-white/10 select-none"
+                          className="w-full rounded-2xl max-h-[70vh] object-contain bg-white/10 select-none cursor-zoom-in transition hover:brightness-110"
                           draggable={false}
+                          onClick={() => setZoomedImage(q.question_image_url)}
                           onContextMenu={e => e.preventDefault()}
                           style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                         />
+                        <p className="text-xs text-primary-300 mt-2 text-center opacity-60">
+                          Click/tap to zoom
+                        </p>
                       </div>
                     ) : (
                       <p className="text-white font-bold text-xl leading-relaxed select-none"
@@ -571,6 +574,53 @@ const QuizPage = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Image Zoom Modal ────────────────────────────────────── */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/80 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div
+            className="relative w-full h-full max-w-[95vw] max-h-[95vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setZoomedImage(null)}
+              className="absolute top-4 right-4 z-[1000] text-white/70 hover:text-white bg-black/30 hover:bg-black/50 rounded-full p-2 transition"
+              aria-label="Close zoom"
+            >
+              <FaTimesCircle size={28} />
+            </button>
+
+            {/* Zoom wrapper */}
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={5}
+              centerOnInit
+              pinch={{ step: 5 }}
+              wheel={{ step: 0.2 }}
+            >
+              {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
+                <TransformComponent
+                  wrapperStyle={{ width: '100%', height: '100%' }}
+                  contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <img
+                    src={zoomedImage}
+                    alt="Zoomed question"
+                    className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none"
+                    draggable={false}
+                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                  />
+                </TransformComponent>
+              )}
+            </TransformWrapper>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

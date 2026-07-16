@@ -15,7 +15,7 @@ import {
   ChatBubbleLeftRightIcon,
   Bars3Icon,
 } from '@heroicons/react/24/outline';
-import { FaBookOpen, FaTrophy } from 'react-icons/fa';
+import { FaBookOpen, FaTrophy, FaQuestionCircle } from 'react-icons/fa'; // added FaQuestionCircle
 import { useAuth } from '../../hooks/useAuth';
 
 const Navbar = () => {
@@ -90,6 +90,7 @@ const Navbar = () => {
     { path: '/contact', icon: EnvelopeIcon, label: 'Contact' },
     { path: '/curriculum', icon: FaBookOpen, label: 'Curriculum' },
     { path: '/achievements', icon: FaTrophy, label: 'Hall of Fame' },
+    { path: '/quiz', icon: FaQuestionCircle, label: 'Quiz' }, // fixed: added icon
   ];
 
   return (
@@ -109,11 +110,10 @@ const Navbar = () => {
           {/* Desktop Navigation – Animated Boxed Panel */}
           <div className="hidden lg:flex items-center gap-4">
             <div className="relative group">
-              {/* Main "Explore" Button – now with its own badge */}
+              {/* Main "Explore" Button */}
               <button className="px-4 py-2 rounded-lg hover:bg-primary-600 transition flex items-center gap-2 text-sm font-medium">
                 <span className="relative inline-flex">
                   <Bars3Icon className="w-5 h-5" />
-                  {/* Badge on the main button */}
                   {chatUnread > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-md ring-2 ring-primary-500">
                       {chatUnread > 99 ? '99+' : chatUnread}
@@ -123,7 +123,7 @@ const Navbar = () => {
                 <span>Explore</span>
               </button>
 
-              {/* The boxed panel – unchanged, still contains the Chat link with badge */}
+              {/* The boxed panel */}
               <div className="absolute left-1/2 -translate-x-1/2 mt-3 w-[900px] max-w-[95vw] 
                             bg-white/90 backdrop-blur-md text-gray-800 
                             rounded-2xl shadow-2xl border border-primary-200/60 
@@ -149,7 +149,7 @@ const Navbar = () => {
 
                 {/* 4‑column grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {/* Chat link with badge (inside panel) */}
+                  {/* Chat link with badge */}
                   <Link
                     to="/chat"
                     onClick={() => {
@@ -201,7 +201,7 @@ const Navbar = () => {
             </div>
           </div>
 
-          {/* Desktop User Menu – unchanged */}
+          {/* Desktop User Menu */}
           <div className="hidden lg:flex items-center gap-2">
             {user ? (
               <>
@@ -250,7 +250,7 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Mobile Menu Button – unchanged */}
+          {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="lg:hidden p-2 rounded-lg hover:bg-primary-600 transition"
@@ -265,7 +265,7 @@ const Navbar = () => {
           </button>
         </div>
 
-        {/* Mobile Menu – unchanged */}
+        {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="lg:hidden py-4 border-t border-primary-400">
             <Link

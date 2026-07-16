@@ -17,7 +17,9 @@ import {
   FaTrophy,
   FaUserPlus,
   FaBullhorn,
-  FaBookOpen
+  FaBookOpen,
+  FaQuestionCircle,   // new
+  FaLightbulb         // new
 } from 'react-icons/fa';
 
 const AdminLayout = () => {
@@ -155,7 +157,6 @@ const AdminLayout = () => {
       badge: pendingCount,
       badgeColor: 'bg-red-500'
     },
-    
     { 
       path: '/admin/gallery', 
       icon: FaImages, 
@@ -172,6 +173,18 @@ const AdminLayout = () => {
       path: '/admin/curriculum', 
       icon: FaBookOpen, 
       label: 'Curriculum' 
+    },
+    // NEW: Quiz Manager
+    { 
+      path: '/admin/quiz', 
+      icon: FaQuestionCircle, 
+      label: 'Quiz Manager' 
+    },
+    // NEW: Daily Tips
+    { 
+      path: '/admin/tips', 
+      icon: FaLightbulb, 
+      label: 'Daily Tips' 
     },
   ];
 

@@ -25,6 +25,7 @@ import ResetPassword from './pages/ResetPassword';
 import UpdatePassword from './pages/UpdatePassword';
 import WelcomeModal from './components/common/WelcomeModal';
 import ChatPage from './pages/ChatPage';
+import QuizPage from './pages/QuizPage';
 
 
 // Student Pages
@@ -47,6 +48,8 @@ import AdminChallenges from './pages/admin/AdminChallenges';
 import AdminAnnouncements from './pages/admin/AdminAnnouncements';
 import AdminCurriculum from './pages/admin/AdminCurriculum';
 import ResetLinkGenerator from './pages/admin/ResetLinkGenerator';
+import AdminQuiz from './pages/admin/AdminQuiz';
+import AdminDailyTips from './pages/admin/AdminDailyTips';
 
 function App() {
   useEffect(() => {
@@ -76,6 +79,8 @@ function App() {
               <Route path="/achievements" element={<AchievementsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/update-password" element={<UpdatePassword />} />
+              <Route path="/quiz" element={<QuizPage />} />
+
               
               {/* Student Auth Routes */}
               <Route path="/student/login" element={<StudentLogin />} />
@@ -107,6 +112,8 @@ function App() {
                 <Route path="/admin/announcements" element={<AdminAnnouncements />} />
                 <Route path="/admin/curriculum" element={<AdminCurriculum />} />
                 <Route path="/admin/reset-link-generator" element={<ResetLinkGenerator />} />
+                <Route path="/admin/quiz" element={<AdminQuiz />} />
+                <Route path="/admin/tips" element={<AdminDailyTips />} />
               </Route>
             </Route>
           </Routes>

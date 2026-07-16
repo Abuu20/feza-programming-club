@@ -21,6 +21,8 @@ import {
 } from 'react-icons/fa';
 import Loader from '../../components/common/Loader';
 import { usePermissions } from '../../hooks/usePermissions';
+import DailyTip from '../../components/common/DailyTip';
+
 
 const StudentDashboard = () => {
   const { user } = useAuth();
@@ -206,6 +208,9 @@ const StudentDashboard = () => {
           </Link>
         </div>
       </div>
+
+      {/* Daily Tip - inserted after welcome header */}
+      <DailyTip />
 
       {/* Social Links (if any) */}
       {(profile?.github || profile?.linkedin || profile?.twitter || profile?.website) && (

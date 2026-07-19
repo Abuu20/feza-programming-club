@@ -96,6 +96,39 @@ const LessonViewer = ({
     return description;
   };
 
+  const renderFormattedText = (text) => {
+    if (!text) return null;
+
+    const sections = String(text)
+      .split(/\n{2,}/)
+      .map(section => section.trim())
+      .filter(Boolean);
+
+    if (sections.length === 0) return null;
+
+    return (
+      <div className="space-y-4 text-gray-700 text-lg leading-8">
+        {sections.map((section, index) => {
+          const lines = section.split(/\n/).map(line => line.trim()).filter(Boolean);
+
+          if (lines.length === 0) return null;
+
+          if (lines.length === 1) {
+            return <p key={index} className="whitespace-pre-wrap break-words">{lines[0]}</p>;
+          }
+
+          return (
+            <div key={index} className="space-y-2">
+              {lines.map((line, lineIndex) => (
+                <p key={`${index}-${lineIndex}`} className="whitespace-pre-wrap break-words">{line}</p>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const runCode = async (projectId, code) => {
     if (!code.trim()) {
       setCodeOutputs(prev => ({ ...prev, [projectId]: '⚠️ Please write some code first!' }));
@@ -414,7 +447,7 @@ const LessonViewer = ({
               )}
               {learningMaterials.length > 0 && <span className="flex items-center gap-1 text-purple-600"><FaImage /> {learningMaterials.length} learning materials</span>}
             </div>
-            <p className="text-gray-700 text-lg leading-relaxed whitespace-pre-wrap break-words">{lesson?.description}</p>
+            {renderFormattedText(lesson?.description)}
           </div>
 
           {/* Prerequisites */}

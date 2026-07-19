@@ -1,5 +1,7 @@
 // src/pages/admin/AdminCurriculum.jsx
 import React, { useState, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { supabase } from '../../services/supabase';
 import { 
   FaPlus, FaEdit, FaTrash, FaBookOpen, FaClock, FaCode, 
@@ -30,6 +32,7 @@ const AdminCurriculum = () => {
   const [expandedProjects, setExpandedProjects] = useState({});
   const [activeTab, setActiveTab] = useState('basic');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showDescriptionPreview, setShowDescriptionPreview] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [modulesLoaded, setModulesLoaded] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
@@ -385,6 +388,7 @@ const AdminCurriculum = () => {
 
   // ==================== LESSON CRUD ====================
   const resetLessonForm = () => {
+    setShowDescriptionPreview(false);
     setLessonForm({
       title: '',
       description: '',
@@ -404,6 +408,7 @@ const AdminCurriculum = () => {
 
   const openLessonEditor = (lesson = null, moduleId) => {
     setSelectedModuleId(moduleId);
+    setShowDescriptionPreview(false);
     if (lesson) {
       setEditingLesson(lesson);
       setLessonForm({
@@ -1406,13 +1411,41 @@ const AdminCurriculum = () => {
                     className="w-full px-3 py-2 border rounded-lg text-lg font-semibold"
                   />
                   
-                  <textarea
-                    placeholder="Lesson Description"
-                    rows="3"
-                    value={lessonForm.description}
-                    onChange={e => setLessonForm({...lessonForm, description: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">Lesson Description</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowDescriptionPreview(false)}
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition ${!showDescriptionPreview ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                          Write
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowDescriptionPreview(true)}
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition ${showDescriptionPreview ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                          <FaEye className="inline mr-1" /> Preview
+                        </button>
+                      </div>
+                    </div>
+                    {showDescriptionPreview ? (
+                      <div className="min-h-[120px] rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{lessonForm.description || '_No description yet_'} </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <textarea
+                        placeholder="Lesson Description"
+                        rows="6"
+                        value={lessonForm.description}
+                        onChange={e => setLessonForm({...lessonForm, description: e.target.value})}
+                        className="w-full px-3 py-2 border rounded-lg"
+                      />
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">Tip: use **bold**, *italic*, lists, and blank lines for cleaner lessons.</p>
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>

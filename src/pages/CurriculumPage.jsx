@@ -311,6 +311,21 @@ const CurriculumPage = () => {
   // Calculate totals
   const totalLessons = Object.values(lessons).flat().length;
   const completedCount = Object.values(progress).filter(p => p === 'completed').length;
+  const inProgressCount = Object.values(progress).filter(p => p === 'started').length;
+  const nextSuggestedLesson = (() => {
+    for (const module of modules) {
+      const moduleLessons = lessons[module.id] || [];
+      const nextLesson = moduleLessons.find(lesson => {
+        if (progress[lesson.id] === 'completed') return false;
+        return isLessonUnlocked(lesson, moduleLessons);
+      });
+
+      if (nextLesson) {
+        return { module, lesson: nextLesson };
+      }
+    }
+    return null;
+  })();
 
   // Curriculum List View
   return (
@@ -324,6 +339,41 @@ const CurriculumPage = () => {
           </div>
         )}
       </div>
+
+      {user && totalLessons > 0 && (
+        <div className="mb-8 rounded-2xl border border-primary-100 bg-gradient-to-r from-primary-50 to-indigo-50 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">Learning progress overview</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {completedCount} completed • {inProgressCount} in progress • {Math.max(totalLessons - completedCount - inProgressCount, 0)} remaining
+              </p>
+            </div>
+            <div className="flex-1 max-w-xl">
+              <div className="h-2 rounded-full bg-white/80 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary-600 transition-all"
+                  style={{ width: `${totalLessons > 0 ? (completedCount / totalLessons) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          {nextSuggestedLesson && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/80 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Continue with</p>
+                <p className="text-sm text-gray-600">{nextSuggestedLesson.lesson.title}</p>
+              </div>
+              <button
+                onClick={() => handleLessonClick(nextSuggestedLesson.module, nextSuggestedLesson.lesson)}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-700"
+              >
+                Open lesson
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-6">
         {modules.map((module, moduleIdx) => {

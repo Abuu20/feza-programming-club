@@ -59,6 +59,15 @@ const QuizPage = () => {
   const [myScore, setMyScore] = useState({ points: 0, correct: 0 });
   const [zoomedImage, setZoomedImage] = useState(null); // NEW for zoom
 
+  useEffect(() => {
+    if (!zoomedImage) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setZoomedImage(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [zoomedImage]);
+
   const timerRef = useRef(null);
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student';
 
@@ -330,17 +339,26 @@ const QuizPage = () => {
                     {q.type === 'image' && q.question_image_url ? (
                       <div>
                         <p className="text-white font-semibold mb-3 text-lg">{q.question_text}</p>
-                        <img
-                          src={q.question_image_url}
-                          alt="Question"
-                          className="w-full rounded-2xl max-h-[70vh] object-contain bg-white/10 select-none cursor-zoom-in transition hover:brightness-110"
-                          draggable={false}
-                          onClick={() => setZoomedImage(q.question_image_url)}
-                          onContextMenu={e => e.preventDefault()}
-                          style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-                        />
+                        <div className="relative">
+                          <img
+                            src={q.question_image_url}
+                            alt="Question"
+                            className="w-full rounded-2xl max-h-[70vh] object-contain bg-white/10 select-none cursor-zoom-in transition hover:brightness-110"
+                            draggable={false}
+                            onClick={() => setZoomedImage(q.question_image_url)}
+                            onContextMenu={e => e.preventDefault()}
+                            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setZoomedImage(q.question_image_url)}
+                            className="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-2 text-xs text-white font-semibold backdrop-blur transition hover:bg-black/80"
+                          >
+                            Zoom image
+                          </button>
+                        </div>
                         <p className="text-xs text-primary-300 mt-2 text-center opacity-60">
-                          Click/tap to zoom
+                          Tap the image or the button to open zoom view
                         </p>
                       </div>
                     ) : (
@@ -594,7 +612,6 @@ const QuizPage = () => {
               <FaTimesCircle size={28} />
             </button>
 
-            {/* Zoom wrapper */}
             <TransformWrapper
               initialScale={1}
               minScale={0.5}
@@ -603,19 +620,44 @@ const QuizPage = () => {
               pinch={{ step: 5 }}
               wheel={{ step: 0.2 }}
             >
-              {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
-                <TransformComponent
-                  wrapperStyle={{ width: '100%', height: '100%' }}
-                  contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <img
-                    src={zoomedImage}
-                    alt="Zoomed question"
-                    className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none"
-                    draggable={false}
-                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-                  />
-                </TransformComponent>
+              {({ zoomIn, zoomOut, resetTransform }) => (
+                <>
+                  <div className="absolute left-4 top-4 z-[1000] flex items-center gap-2 rounded-full bg-black/40 p-2 backdrop-blur text-white text-xs">
+                    <button
+                      type="button"
+                      onClick={zoomIn}
+                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={zoomOut}
+                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetTransform}
+                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  <TransformComponent
+                    wrapperStyle={{ width: '100%', height: '100%' }}
+                    contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <img
+                      src={zoomedImage}
+                      alt="Zoomed question"
+                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none"
+                      draggable={false}
+                      style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                    />
+                  </TransformComponent>
+                </>
               )}
             </TransformWrapper>
           </div>

@@ -988,51 +988,6 @@ const FileManagerPage = () => {
         {/* File grid/list */}
         <div className="flex-1 overflow-y-auto p-5">
 
-          {view === 'shared' && (
-            <div className="space-y-4">
-              {files.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-500">
-                  This shared folder is empty.
-                </div>
-              ) : (
-                <>
-                  {files.filter(file => !file.is_folder).length > 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-4">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Quick Links</h3>
-                      <div className="space-y-2">
-                        {files.filter(file => !file.is_folder).map(file => {
-                          const info = getLinkCardInfo(file.name, file.public_url ? '' : '');
-                          const linkInfo = info || { title: file.name, url: file.public_url };
-                          return (
-                            <a key={file.id} href={linkInfo.url} target="_blank" rel="noopener noreferrer"
-                              className="block rounded-xl border border-gray-200 p-3 hover:border-primary-400 hover:bg-primary-50 transition">
-                              <p className="font-medium text-gray-900">{linkInfo.title}</p>
-                              <p className="text-sm text-gray-500 truncate">{linkInfo.url}</p>
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {files.filter(file => file.is_folder).length > 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-200 p-4">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">Folders</h3>
-                      <div className="space-y-2">
-                        {files.filter(file => file.is_folder).map(folder => (
-                          <button key={folder.id} onClick={() => openFile(folder)}
-                            className="w-full text-left rounded-xl border border-gray-200 p-3 hover:border-primary-400 hover:bg-primary-50 transition">
-                            <p className="font-medium text-gray-900">{folder.name}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
           {/* MY FILES */}
           {view === 'my' && (
             loading ? (

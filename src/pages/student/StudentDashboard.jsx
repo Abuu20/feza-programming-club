@@ -17,7 +17,8 @@ import {
   FaLinkedin,
   FaTwitter,
   FaGlobe,
-  FaCamera
+  FaCamera,
+  FaFolder
 } from 'react-icons/fa';
 import Loader from '../../components/common/Loader';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -419,6 +420,12 @@ const StudentDashboard = () => {
 
       {/* Quick Links */}
       <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link to="/student/files"
+            className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white p-4 rounded-xl text-center hover:shadow-lg transition">
+            <FaFolder className="text-2xl mx-auto mb-2" />
+            <span className="font-semibold">My Files</span>
+            <p className="text-sm opacity-90">Manage your files & folders</p>
+          </Link>
         <Link
           to="/python-practice"
           className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-xl text-center hover:shadow-lg transition"

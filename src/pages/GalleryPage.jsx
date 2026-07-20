@@ -53,15 +53,31 @@ const GalleryPage = () => {
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    const valid = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
-    if (valid.length !== files.length) toast.error('Only images and videos are allowed');
+    const valid = files.filter((f) => {
+      const isImage = f.type.startsWith('image/');
+      const isUnderLimit = f.size <= 1 * 1024 * 1024;
+      return isImage && isUnderLimit;
+    });
+    const invalid = files.filter((f) => {
+      const isImage = f.type.startsWith('image/');
+      return !isImage || f.size > 1 * 1024 * 1024;
+    });
+
+    if (invalid.length > 0) {
+      const invalidMessage = invalid.map((f) => {
+        if (!f.type.startsWith('image/')) return `${f.name} is not an image`;
+        return `${f.name} exceeds 1MB`;
+      }).join('; ');
+      toast.error(invalidMessage);
+    }
+
     setSelectedFiles(valid);
   };
 
   const handleUpload = async () => {
-    if (!selectedFiles.length) { toast.error('Select at least one file'); return; }
+    if (!selectedFiles.length) { toast.error('Select at least one image'); return; }
     setUploading(true);
-    const toastId = toast.loading(`Uploading ${selectedFiles.length} file(s)...`);
+    const toastId = toast.loading(`Uploading ${selectedFiles.length} image(s)...`);
     let success = 0;
 
     for (const file of selectedFiles) {
@@ -213,12 +229,12 @@ const GalleryPage = () => {
                   <FaUpload className="text-gray-400 text-2xl mx-auto mb-2" />
                   <p className="text-sm text-gray-500">
                     {selectedFiles.length > 0
-                      ? `${selectedFiles.length} file(s) selected`
-                      : 'Click to select images or videos'}
+                      ? `${selectedFiles.length} image(s) selected`
+                      : 'Click to select image files'}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">Multiple files supported</p>
+                  <p className="text-xs text-gray-400 mt-1">Multiple images supported, max 1MB each</p>
                 </div>
-                <input ref={fileRef} type="file" accept="image/*,video/*"
+                <input ref={fileRef} type="file" accept="image/*"
                   multiple className="hidden" onChange={handleFileSelect} />
               </div>
 

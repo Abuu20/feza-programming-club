@@ -147,41 +147,18 @@ const Navbar = () => {
                   </span>
                 </div>
 
-                {/* 4‑column grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {/* Chat link with badge */}
-                  <Link
-                    to="/chat"
-                    onClick={() => {
-                      setChatUnread(0);
-                      try {
-                        sessionStorage.setItem('feza-chat-unread-total', '0');
-                      } catch (e) {}
-                    }}
-                    className="group/link flex items-center gap-3 px-3 py-3 rounded-xl 
-                               bg-gray-50/50 hover:bg-primary-50 
-                               transition-all duration-200 
-                               hover:shadow-md hover:-translate-y-0.5 
-                               border border-transparent hover:border-primary-200"
-                  >
-                    <div className="p-2 rounded-lg bg-primary-100 text-primary-600 
-                                    group-hover/link:bg-primary-200 group-hover/link:scale-110 
-                                    transition-all duration-200">
-                      <ChatBubbleLeftRightIcon className="w-5 h-5" />
-                    </div>
-                    <span className="font-medium text-sm">Chat</span>
-                    {chatUnread > 0 && (
-                      <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1">
-                        {chatUnread > 99 ? '99+' : chatUnread}
-                      </span>
-                    )}
-                  </Link>
-
-                  {/* All other nav links */}
-                  {navLinks.map((link) => (
+                {/* 4‑column grid with Community section */}
+                <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {/* Chat link with badge */}
                     <Link
-                      key={link.path}
-                      to={link.path}
+                      to="/chat"
+                      onClick={() => {
+                        setChatUnread(0);
+                        try {
+                          sessionStorage.setItem('feza-chat-unread-total', '0');
+                        } catch (e) {}
+                      }}
                       className="group/link flex items-center gap-3 px-3 py-3 rounded-xl 
                                  bg-gray-50/50 hover:bg-primary-50 
                                  transition-all duration-200 
@@ -191,11 +168,52 @@ const Navbar = () => {
                       <div className="p-2 rounded-lg bg-primary-100 text-primary-600 
                                       group-hover/link:bg-primary-200 group-hover/link:scale-110 
                                       transition-all duration-200">
-                        <link.icon className="w-5 h-5" />
+                        <ChatBubbleLeftRightIcon className="w-5 h-5" />
                       </div>
-                      <span className="font-medium text-sm">{link.label}</span>
+                      <span className="font-medium text-sm">Chat</span>
+                      {chatUnread > 0 && (
+                        <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-[20px] flex items-center justify-center px-1">
+                          {chatUnread > 99 ? '99+' : chatUnread}
+                        </span>
+                      )}
                     </Link>
-                  ))}
+
+                    {/* All other nav links */}
+                    {navLinks.map((link) => (
+                      <Link
+                        key={link.path}
+                        to={link.path}
+                        className="group/link flex items-center gap-3 px-3 py-3 rounded-xl 
+                                   bg-gray-50/50 hover:bg-primary-50 
+                                   transition-all duration-200 
+                                   hover:shadow-md hover:-translate-y-0.5 
+                                   border border-transparent hover:border-primary-200"
+                      >
+                        <div className="p-2 rounded-lg bg-primary-100 text-primary-600 
+                                        group-hover/link:bg-primary-200 group-hover/link:scale-110 
+                                        transition-all duration-200">
+                          <link.icon className="w-5 h-5" />
+                        </div>
+                        <span className="font-medium text-sm">{link.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <div className="rounded-3xl border border-primary-100 bg-primary-50/90 p-4 shadow-sm">
+                    <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">
+                      Community
+                    </div>
+                    <Link
+                      to="/student/files"
+                      className="group flex items-start gap-3 rounded-2xl bg-white p-4 transition hover:bg-primary-50 border border-transparent hover:border-primary-200"
+                    >
+                      <span className="text-3xl">📁</span>
+                      <div>
+                        <div className="font-semibold text-sm text-primary-700">My Files</div>
+                        <p className="mt-1 text-sm text-gray-600">Personal file manager</p>
+                      </div>
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>

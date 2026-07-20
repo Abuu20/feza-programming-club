@@ -26,6 +26,9 @@ import UpdatePassword from './pages/UpdatePassword';
 import WelcomeModal from './components/common/WelcomeModal';
 import ChatPage from './pages/ChatPage';
 import QuizPage from './pages/QuizPage';
+import FileManagerPage from './pages/FileManagerPage';
+import FileEditorPage from './pages/FileEditorPage';
+
 
 
 // Student Pages
@@ -94,6 +97,9 @@ function App() {
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
                 <Route path="/student/profile" element={<MemberProfile />} />
                 <Route path="/student/members-manage" element={<MembersManagePage />} />  
+                <Route path="/student/files" element={<FileManagerPage />} />
+                <Route path="/student/files/:fileId/edit" element={<FileEditorPage />} />
+
 
               </Route>
             </Route>

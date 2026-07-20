@@ -5,7 +5,7 @@ import Footer from '../common/Footer';
 import AnnouncementBanner from '../common/AnnouncementBanner';
 
 // Pages that need full viewport height with no footer
-const FULL_HEIGHT_ROUTES = ['/chat'];
+const FULL_HEIGHT_ROUTES = ['/chat', '/python-practice', '/student/files'];
 
 const PublicLayout = () => {
   const { pathname } = useLocation();

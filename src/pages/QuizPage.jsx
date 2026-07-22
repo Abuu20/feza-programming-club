@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import {
   FaTrophy, FaClock, FaCheck, FaTimes, FaFire, FaMedal,
   FaStar, FaLock, FaSpinner, FaUsers, FaBolt, FaChartBar,
-  FaTimesCircle   // for close button
+  FaTimesCircle
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -57,7 +57,7 @@ const QuizPage = () => {
   const [loading, setLoading] = useState(true);
   const [newLeaderEntry, setNewLeaderEntry] = useState(null);
   const [myScore, setMyScore] = useState({ points: 0, correct: 0 });
-  const [zoomedImage, setZoomedImage] = useState(null); // NEW for zoom
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   useEffect(() => {
     if (!zoomedImage) return undefined;
@@ -142,7 +142,7 @@ const QuizPage = () => {
 
   useEffect(() => () => clearInterval(timerRef.current), []);
 
-  // ── When quiz ends, load full submissions from DB so review is complete ──
+  // ── When quiz ends, load full submissions from DB ────────────
   useEffect(() => {
     if (phase !== 'ended' || !activeSession?.id || !user?.id) return;
     const loadMySubmissions = async () => {
@@ -161,7 +161,7 @@ const QuizPage = () => {
             selectedAnswer: s.selected_answer,
           };
         });
-        setResults(prev => ({ ...rebuilt, ...prev })); // prev wins (optimistic already set)
+        setResults(prev => ({ ...rebuilt, ...prev }));
         const totalPts = data.reduce((s, r) => s + (r.points_earned || 0), 0);
         const totalCorrect = data.filter(r => r.is_correct).length;
         setMyScore({ points: totalPts, correct: totalCorrect });
@@ -280,8 +280,10 @@ const QuizPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* ── Left: Question area ─────────────────────────────── */}
-          <div className="lg:col-span-2 space-y-4">
-
+          <div 
+            className="lg:col-span-2 space-y-4"
+            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}   // <--- THIS IS THE ADDED LINE
+          >
             {/* No session */}
             {!activeSession && (
               <div className="bg-white/10 backdrop-blur rounded-3xl p-8 text-center text-white">
@@ -366,7 +368,7 @@ const QuizPage = () => {
                     {/* Question content – with zoomable image */}
                     {q.type === 'image' && q.question_image_url ? (
                       <div>
-                        <p className="text-white font-semibold mb-3 text-lg">{q.question_text}</p>
+                        <p className="text-white font-semibold mb-3 text-lg whitespace-pre-wrap">{q.question_text}</p>
                         <div className="relative">
                           <img
                             src={q.question_image_url}
@@ -390,7 +392,7 @@ const QuizPage = () => {
                         </p>
                       </div>
                     ) : (
-                      <p className="text-white font-bold text-xl leading-relaxed select-none"
+                      <p className="text-white font-bold text-xl leading-relaxed select-none whitespace-pre-wrap"
                         style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
                         {q.question_text}
                       </p>
@@ -434,7 +436,7 @@ const QuizPage = () => {
                           <span className="w-8 h-8 rounded-xl bg-white/30 flex items-center justify-center font-black text-sm flex-shrink-0">
                             {isSubmitted && isCorrect ? <FaCheck size={14} /> : isSubmitted && isWrong ? <FaTimes size={14} /> : opt}
                           </span>
-                          <span className="text-sm leading-tight">{text}</span>
+                          <span className="text-sm leading-tight whitespace-pre-wrap">{text}</span>
                         </button>
                       );
                     })}
@@ -553,7 +555,7 @@ const QuizPage = () => {
                             <div className="bg-white p-4 space-y-3">
                               {/* Question text */}
                               {q.question_text && (
-                                <p className="font-semibold text-gray-900 text-sm leading-relaxed">{q.question_text}</p>
+                                <p className="font-semibold text-gray-900 text-sm leading-relaxed whitespace-pre-wrap">{q.question_text}</p>
                               )}
                               {/* Question image */}
                               {q.question_image_url && (
@@ -584,7 +586,7 @@ const QuizPage = () => {
                                         : 'bg-gray-200 text-gray-500'}`}>
                                         {opt.key}
                                       </span>
-                                      <span className={`flex-1 font-medium leading-snug
+                                      <span className={`flex-1 font-medium leading-snug whitespace-pre-wrap
                                         ${isCorrectOpt ? 'text-green-800' : isMyWrong ? 'text-red-700' : 'text-gray-500'}`}>
                                         {opt.text}
                                       </span>

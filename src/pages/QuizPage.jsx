@@ -3,9 +3,11 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 import {
   FaTrophy, FaClock, FaCheck, FaTimes, FaFire, FaMedal,
-  FaStar, FaLock, FaSpinner, FaUsers, FaBolt, FaChartBar
+  FaStar, FaLock, FaSpinner, FaUsers, FaBolt, FaChartBar,
+  FaTimesCircle   // for close button
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
@@ -14,122 +16,6 @@ const OPTION_COLORS = {
   B: { base: 'border-purple-200 bg-purple-50 text-purple-800', active: 'border-purple-500 bg-purple-500 text-white', correct: 'border-green-500 bg-green-500 text-white', wrong: 'border-red-400  bg-red-400  text-white' },
   C: { base: 'border-orange-200 bg-orange-50 text-orange-800', active: 'border-orange-500 bg-orange-500 text-white', correct: 'border-green-500 bg-green-500 text-white', wrong: 'border-red-400  bg-red-400  text-white' },
   D: { base: 'border-teal-200   bg-teal-50   text-teal-800',   active: 'border-teal-500   bg-teal-500   text-white', correct: 'border-green-500 bg-green-500 text-white', wrong: 'border-red-400  bg-red-400  text-white' },
-};
-
-// ── Zoomable Image ────────────────────────────────────────────────────────────
-const ImageZoom = ({ src, alt = 'Question image' }) => {
-  const [zoomed, setZoomed] = useState(false);
-  const [scale, setScale] = useState(1);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const imgRef = useRef(null);
-
-  // Reset on close
-  const close = () => { setZoomed(false); setScale(1); setPos({ x: 0, y: 0 }); };
-
-  // Wheel zoom inside modal
-  const onWheel = (e) => {
-    e.preventDefault();
-    setScale(s => Math.min(5, Math.max(1, s - e.deltaY * 0.005)));
-  };
-
-  // Drag inside modal
-  const onMouseDown = (e) => { setDragging(true); setDragStart({ x: e.clientX - pos.x, y: e.clientY - pos.y }); };
-  const onMouseMove = (e) => { if (dragging) setPos({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); };
-  const onMouseUp   = () => setDragging(false);
-
-  // Double click to zoom in/out
-  const onDblClick  = () => { setScale(s => s > 1 ? 1 : 2.5); setPos({ x: 0, y: 0 }); };
-
-  return (
-    <>
-      {/* Thumbnail — click to open zoom modal */}
-      <div className="relative group cursor-zoom-in" onClick={() => setZoomed(true)}>
-        <img
-          src={src} alt={alt}
-          className="w-full rounded-2xl border border-white/20 select-none object-contain max-h-72"
-          draggable={false}
-          onContextMenu={e => e.preventDefault()}
-          style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-        />
-        {/* Zoom hint overlay */}
-        <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
-          <div className="opacity-0 group-hover:opacity-100 transition-all bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-            </svg>
-            Click to zoom
-          </div>
-        </div>
-      </div>
-
-      {/* Fullscreen zoom modal */}
-      {zoomed && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}
-          onClick={e => { if (e.target === e.currentTarget) close(); }}>
-
-          {/* Controls */}
-          <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-            <div className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">
-              {Math.round(scale * 100)}% • Scroll or pinch to zoom • Drag to pan
-            </div>
-            <button onClick={close}
-              className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-full transition">
-              <FaTimes size={16} />
-            </button>
-          </div>
-
-          {/* Zoom buttons */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10">
-            <button onClick={() => { setScale(s => Math.max(1, s - 0.5)); setPos({x:0,y:0}); }}
-              className="bg-white/20 hover:bg-white/30 text-white w-10 h-10 rounded-full text-xl font-bold transition flex items-center justify-center">
-              −
-            </button>
-            <button onClick={() => { setScale(1); setPos({x:0,y:0}); }}
-              className="bg-white/20 hover:bg-white/30 text-white px-4 h-10 rounded-full text-xs font-semibold transition">
-              Reset
-            </button>
-            <button onClick={() => setScale(s => Math.min(5, s + 0.5))}
-              className="bg-white/20 hover:bg-white/30 text-white w-10 h-10 rounded-full text-xl font-bold transition flex items-center justify-center">
-              +
-            </button>
-          </div>
-
-          {/* The image */}
-          <div
-            className="overflow-hidden w-full h-full flex items-center justify-center"
-            onWheel={onWheel}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            onMouseLeave={onMouseUp}
-            onDoubleClick={onDblClick}
-            style={{ cursor: scale > 1 ? (dragging ? 'grabbing' : 'grab') : 'zoom-in' }}>
-            <img
-              ref={imgRef}
-              src={src}
-              alt={alt}
-              draggable={false}
-              onContextMenu={e => e.preventDefault()}
-              style={{
-                transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`,
-                transition: dragging ? 'none' : 'transform 0.15s ease',
-                maxWidth: '90vw',
-                maxHeight: '85vh',
-                objectFit: 'contain',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                touchAction: 'none',
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </>
-  );
 };
 
 // ── Leaderboard entry ─────────────────────────────────────────────────────────
@@ -162,16 +48,25 @@ const QuizPage = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState({}); // { questionId: 'A'|'B'|'C'|'D' }
-  const [submitted, setSubmitted] = useState({}); // { questionId: true }
-  const [results, setResults] = useState({}); // { questionId: { correct, pointsEarned } }
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState({});
+  const [results, setResults] = useState({});
   const [leaderboard, setLeaderboard] = useState([]);
   const [timeLeft, setTimeLeft] = useState(null);
-  const [phase, setPhase] = useState('lobby'); // lobby | active | ended | results
+  const [phase, setPhase] = useState('lobby');
   const [loading, setLoading] = useState(true);
   const [newLeaderEntry, setNewLeaderEntry] = useState(null);
   const [myScore, setMyScore] = useState({ points: 0, correct: 0 });
-  const [showExplanation, setShowExplanation] = useState({});
+  const [zoomedImage, setZoomedImage] = useState(null); // NEW for zoom
+
+  useEffect(() => {
+    if (!zoomedImage) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setZoomedImage(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [zoomedImage]);
 
   const timerRef = useRef(null);
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student';
@@ -194,7 +89,6 @@ const QuizPage = () => {
       .limit(10);
     setSessions(data || []);
     setLoading(false);
-    // Auto-join active session
     const active = (data || []).find(s => s.status === 'active');
     if (active && (!activeSession || activeSession.id !== active.id)) {
       joinSession(active);
@@ -248,6 +142,34 @@ const QuizPage = () => {
 
   useEffect(() => () => clearInterval(timerRef.current), []);
 
+  // ── When quiz ends, load full submissions from DB so review is complete ──
+  useEffect(() => {
+    if (phase !== 'ended' || !activeSession?.id || !user?.id) return;
+    const loadMySubmissions = async () => {
+      const { data } = await supabase
+        .from('quiz_submissions')
+        .select('question_id, selected_answer, is_correct, points_earned')
+        .eq('session_id', activeSession.id)
+        .eq('user_id', user.id);
+      if (data) {
+        const rebuilt = {};
+        data.forEach(s => {
+          rebuilt[s.question_id] = {
+            correct: s.is_correct,
+            pointsEarned: s.points_earned || 0,
+            correctAnswer: questions.find(q => q.id === s.question_id)?.correct_answer || '',
+            selectedAnswer: s.selected_answer,
+          };
+        });
+        setResults(prev => ({ ...rebuilt, ...prev })); // prev wins (optimistic already set)
+        const totalPts = data.reduce((s, r) => s + (r.points_earned || 0), 0);
+        const totalCorrect = data.filter(r => r.is_correct).length;
+        setMyScore({ points: totalPts, correct: totalCorrect });
+      }
+    };
+    loadMySubmissions();
+  }, [phase, activeSession?.id, user?.id]);
+
   // ── Leaderboard ────────────────────────────────────────────────
   const fetchLeaderboard = async (sessionId) => {
     const { data } = await supabase
@@ -295,9 +217,8 @@ const QuizPage = () => {
     const isCorrect = answer === question.correct_answer;
     const pointsEarned = isCorrect ? question.points : 0;
 
-    // Optimistic UI
     setSubmitted(p => ({ ...p, [question.id]: true }));
-    setResults(p => ({ ...p, [question.id]: { correct: isCorrect, pointsEarned, correctAnswer: question.correct_answer } }));
+    setResults(p => ({ ...p, [question.id]: { correct: isCorrect, pointsEarned, correctAnswer: question.correct_answer, selectedAnswer: answer } }));
     setMyScore(p => ({
       points: p.points + pointsEarned,
       correct: p.correct + (isCorrect ? 1 : 0),
@@ -324,7 +245,6 @@ const QuizPage = () => {
       }
     }
 
-    // Auto-advance after 1.5s
     if (currentQ < questions.length - 1) {
       setTimeout(() => setCurrentQ(p => p + 1), 1500);
     }
@@ -443,11 +363,31 @@ const QuizPage = () => {
                       </span>
                     </div>
 
-                    {/* Question content */}
+                    {/* Question content – with zoomable image */}
                     {q.type === 'image' && q.question_image_url ? (
                       <div>
                         <p className="text-white font-semibold mb-3 text-lg">{q.question_text}</p>
-                        <ImageZoom src={q.question_image_url} alt="Question" />
+                        <div className="relative">
+                          <img
+                            src={q.question_image_url}
+                            alt="Question"
+                            className="w-full rounded-2xl max-h-[70vh] object-contain bg-white/10 select-none cursor-zoom-in transition hover:brightness-110"
+                            draggable={false}
+                            onClick={() => setZoomedImage(q.question_image_url)}
+                            onContextMenu={e => e.preventDefault()}
+                            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setZoomedImage(q.question_image_url)}
+                            className="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-2 text-xs text-white font-semibold backdrop-blur transition hover:bg-black/80"
+                          >
+                            Zoom image
+                          </button>
+                        </div>
+                        <p className="text-xs text-primary-300 mt-2 text-center opacity-60">
+                          Tap the image or the button to open zoom view
+                        </p>
                       </div>
                     ) : (
                       <p className="text-white font-bold text-xl leading-relaxed select-none"
@@ -578,29 +518,110 @@ const QuizPage = () => {
                       <p className="text-xs text-gray-400 mt-1">Your Rank</p>
                     </div>
                   </div>
-                  {/* Answer review */}
+                  {/* Answer review — full detail with image + options */}
                   {questions.length > 0 && (
-                    <div className="space-y-3 text-left">
-                      <h3 className="font-bold text-gray-800 mb-3">Answer Review</h3>
+                    <div className="space-y-4 text-left mt-2">
+                      <h3 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                        📋 Full Answer Review
+                        <span className="text-xs font-normal text-gray-400 ml-1">
+                          {Object.values(results).filter(r=>r.correct).length}/{questions.length} correct
+                        </span>
+                      </h3>
                       {questions.map((q, i) => {
-                        const res = results[q.id];
+                        const res        = results[q.id];
+                        const myAnswer   = res?.selectedAnswer;
+                        const correctAns = res?.correctAnswer || q.correct_answer;
+                        const isCorrect  = res?.correct;
+                        const notAnswered = !res;
+                        const opts = ['A','B','C','D']
+                          .map(k => ({ key: k, text: q[`option_${k.toLowerCase()}`] }))
+                          .filter(o => o.text);
                         return (
-                          <div key={q.id} className={`p-4 rounded-xl border ${res?.correct ? 'bg-green-50 border-green-200' : res ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-                            <div className="flex items-start gap-2">
-                              <span className="text-sm font-bold text-gray-500 flex-shrink-0">Q{i+1}.</span>
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-800">{q.question_text}</p>
-                                {res ? (
-                                  <p className={`text-xs mt-1 ${res.correct ? 'text-green-600' : 'text-red-600'}`}>
-                                    {res.correct ? `✅ Correct! +${res.pointsEarned} pts` : `❌ Wrong. Answer: ${res.correctAnswer}`}
-                                  </p>
+                          <div key={q.id} className={`rounded-2xl overflow-hidden border-2
+                            ${isCorrect ? 'border-green-400' : notAnswered ? 'border-gray-200' : 'border-red-400'}`}>
+                            {/* Header strip */}
+                            <div className={`flex items-center gap-3 px-4 py-2.5
+                              ${isCorrect ? 'bg-green-500' : notAnswered ? 'bg-gray-400' : 'bg-red-500'}`}>
+                              <span className="text-white font-black text-sm">Q{i+1}</span>
+                              <span className="text-white/90 text-xs font-semibold flex-1">
+                                {isCorrect   ? `✓ Correct  +${res?.pointsEarned || q.points} pts`
+                                : notAnswered ? '— Not answered'
+                                :              `✗ Wrong  ·  Correct answer: Option ${correctAns}`}
+                              </span>
+                              <span className="text-white/70 text-xs">{q.points} pts</span>
+                            </div>
+                            <div className="bg-white p-4 space-y-3">
+                              {/* Question text */}
+                              {q.question_text && (
+                                <p className="font-semibold text-gray-900 text-sm leading-relaxed">{q.question_text}</p>
+                              )}
+                              {/* Question image */}
+                              {q.question_image_url && (
+                                <img
+                                  src={q.question_image_url}
+                                  alt={`Q${i+1}`}
+                                  draggable={false}
+                                  onContextMenu={e => e.preventDefault()}
+                                  onClick={() => setZoomedImage(q.question_image_url)}
+                                  className="w-full max-h-56 object-contain rounded-xl border border-gray-200 bg-gray-50 cursor-zoom-in"
+                                  style={{userSelect:'none',WebkitUserSelect:'none'}}
+                                />
+                              )}
+                              {/* Options */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {opts.map(opt => {
+                                  const isCorrectOpt = opt.key === correctAns;
+                                  const isMyWrong    = opt.key === myAnswer && !isCorrectOpt;
+                                  return (
+                                    <div key={opt.key}
+                                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-sm
+                                        ${isCorrectOpt ? 'border-green-400 bg-green-50'
+                                        : isMyWrong   ? 'border-red-400 bg-red-50'
+                                        : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0
+                                        ${isCorrectOpt ? 'bg-green-500 text-white'
+                                        : isMyWrong   ? 'bg-red-500 text-white'
+                                        : 'bg-gray-200 text-gray-500'}`}>
+                                        {opt.key}
+                                      </span>
+                                      <span className={`flex-1 font-medium leading-snug
+                                        ${isCorrectOpt ? 'text-green-800' : isMyWrong ? 'text-red-700' : 'text-gray-500'}`}>
+                                        {opt.text}
+                                      </span>
+                                      {isCorrectOpt && <span className="text-green-500 font-bold flex-shrink-0">✓</span>}
+                                      {isMyWrong    && <span className="text-red-500   font-bold flex-shrink-0">✗</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {/* Your answer summary */}
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                {notAnswered ? (
+                                  <span className="italic text-gray-400">You did not answer this question.</span>
                                 ) : (
-                                  <p className="text-xs mt-1 text-gray-400">Not answered</p>
-                                )}
-                                {q.explanation && (
-                                  <p className="text-xs text-gray-500 mt-1 italic">{q.explanation}</p>
+                                  <>
+                                    <span>Your answer:</span>
+                                    <span className={`font-bold px-2 py-0.5 rounded-full
+                                      ${isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                      Option {myAnswer}
+                                    </span>
+                                    {!isCorrect && <>
+                                      <span className="text-gray-300">·</span>
+                                      <span>Correct:</span>
+                                      <span className="font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                        Option {correctAns}
+                                      </span>
+                                    </>}
+                                  </>
                                 )}
                               </div>
+                              {/* Explanation */}
+                              {q.explanation && (
+                                <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5">
+                                  <span className="text-blue-400 flex-shrink-0">💡</span>
+                                  <p className="text-xs text-blue-700 leading-relaxed">{q.explanation}</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -680,6 +701,77 @@ const QuizPage = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Image Zoom Modal ────────────────────────────────────── */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/80 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setZoomedImage(null)}
+        >
+          <div
+            className="relative w-full h-full max-w-[95vw] max-h-[95vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setZoomedImage(null)}
+              className="absolute top-4 right-4 z-[1000] text-white/70 hover:text-white bg-black/30 hover:bg-black/50 rounded-full p-2 transition"
+              aria-label="Close zoom"
+            >
+              <FaTimesCircle size={28} />
+            </button>
+
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={5}
+              centerOnInit
+              pinch={{ step: 5 }}
+              wheel={{ step: 0.2 }}
+            >
+              {({ zoomIn, zoomOut, resetTransform }) => (
+                <>
+                  <div className="absolute left-4 top-4 z-[1000] flex items-center gap-2 rounded-full bg-black/40 p-2 backdrop-blur text-white text-xs">
+                    <button
+                      type="button"
+                      onClick={zoomIn}
+                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={zoomOut}
+                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetTransform}
+                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  <TransformComponent
+                    wrapperStyle={{ width: '100%', height: '100%' }}
+                    contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <img
+                      src={zoomedImage}
+                      alt="Zoomed question"
+                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none"
+                      draggable={false}
+                      style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                    />
+                  </TransformComponent>
+                </>
+              )}
+            </TransformWrapper>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

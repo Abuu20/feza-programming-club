@@ -97,7 +97,7 @@ const QuestionForm = ({ sessionId, question, onSaved, onCancel }) => {
             Question Text {form.type === 'image' ? '(caption shown above image)' : '*'}
           </label>
           <textarea value={form.question_text} onChange={e => setForm(p=>({...p, question_text: e.target.value}))}
-            rows={3} placeholder="Type your question here..." className="input-field text-sm resize-none" />
+            rows={3} placeholder="Type your question here... (use Enter for new lines, spaces for indentation)" className="input-field text-sm" />
         </div>
 
         {form.type === 'image' && (
@@ -356,7 +356,7 @@ const SessionCard = ({ session, onRefresh }) => {
                       {i+1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{q.question_text}</p>
+                      <p className="text-sm font-medium text-gray-800 line-clamp-2 whitespace-pre-wrap">{q.question_text}</p>
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                         <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">✓ {q.correct_answer}</span>
                         <span>{q.points} pts</span>

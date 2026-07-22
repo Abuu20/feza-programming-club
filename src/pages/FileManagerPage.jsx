@@ -1,12 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import { python } from '@codemirror/lang-python';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import { ensureFileExtension, getLinkCardInfo, isEditableTextFile, isLinkCardFile, sanitizeFileName } from '../utils/fileManager';
 import {
   FaFolder, FaFolderOpen, FaFile, FaFilePdf, FaFileImage,
   FaFileCode, FaFileArchive, FaFileAlt, FaUpload, FaPlus,
@@ -83,7 +78,7 @@ const ConfirmModal = ({ title, message, confirmLabel='Delete', confirmColor='bg-
 );
 
 // ── File Preview Modal ────────────────────────────────────────────────────────
-const PreviewModal = ({ file, onClose, onEdit }) => {
+const PreviewModal = ({ file, onClose }) => {
   const type = getFileType(file.name);
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex flex-col" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -94,11 +89,6 @@ const PreviewModal = ({ file, onClose, onEdit }) => {
           <span className="text-gray-400 text-sm">{formatSize(file.size_bytes)}</span>
         </div>
         <div className="flex items-center gap-3">
-          {isEditableTextFile(file.name) && onEdit && (
-            <button onClick={() => { onEdit(file); onClose(); }} className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white transition">
-              <FaEdit size={13} /> Edit
-            </button>
-          )}
           <a href={file.public_url} target="_blank" rel="noopener noreferrer" download={file.name}
             className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white transition">
             <FaDownload size={13} /> Download
@@ -133,179 +123,6 @@ const PreviewModal = ({ file, onClose, onEdit }) => {
             </a>
           </div>
         )}
-      </div>
-    </div>
-  );
-};
-
-// ── New File Modal ───────────────────────────────────────────────────────────
-const NewFileModal = ({ onConfirm, onCancel }) => {
-  const [name, setName] = useState('');
-  const [content, setContent] = useState('');
-  const [language, setLanguage] = useState('text');
-  const ref = useRef(null);
-  useEffect(() => ref.current?.focus(), []);
-
-  const templates = {
-    text: '',
-    python: '# Write your Python code here\nprint("Hello, Feza Programming Club!")',
-    html: '<!DOCTYPE html>\n<html>\n  <body>\n    <h1>Hello</h1>\n  </body>\n</html>',
-    css: 'body {\n  font-family: Arial, sans-serif;\n  color: #222;\n}',
-    javascript: 'console.log("Hello from the editor")',
-    markdown: '# Heading\n\nWrite your notes here.',
-    link: 'Title: Project Link\nURL: https://forms.gle/fpNEQooYBX25gcG67'
-  };
-
-  const handleLanguageChange = (nextLang) => {
-    setLanguage(nextLang);
-    if (!content.trim()) {
-      setContent(templates[nextLang] || '');
-    }
-  };
-
-  const extensionMap = {
-    text: 'txt',
-    python: 'py',
-    html: 'html',
-    css: 'css',
-    javascript: 'js',
-    markdown: 'md',
-    link: 'link'
-  };
-
-  const handleCreate = () => {
-    const safeName = ensureFileExtension(name || `untitled.${extensionMap[language] || 'txt'}`, extensionMap[language] || 'txt');
-    if (!safeName.trim()) return;
-    onConfirm({ name: safeName, content });
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-6 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-900 flex items-center gap-2">
-            <FaFileAlt className="text-primary-500" /> New File
-          </h3>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">Language</label>
-            <select value={language} onChange={e => handleLanguageChange(e.target.value)}
-              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-gray-50">
-              <option value="text">Text</option>
-              <option value="python">Python</option>
-              <option value="html">HTML</option>
-              <option value="css">CSS</option>
-              <option value="javascript">JavaScript</option>
-              <option value="markdown">Markdown</option>
-            </select>
-          </div>
-        </div>
-
-        <input ref={ref} type="text" value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleCreate()}
-          placeholder="File name (example: notes.txt)" className="input-field mb-3" />
-
-        <div className="flex-1 min-h-[360px] border border-gray-200 rounded-xl overflow-hidden">
-          <CodeMirror
-            value={content || templates[language] || ''}
-            height="360px"
-            theme={oneDark}
-            extensions={language === 'python' ? [python()] : []}
-            onChange={(value) => setContent(value)}
-            basicSetup={{ lineNumbers: true, foldGutter: true, autocompletion: true }}
-          />
-        </div>
-
-        <div className="flex gap-3 mt-4">
-          <button onClick={onCancel} className="flex-1 py-2 border border-gray-300 rounded-xl text-sm text-gray-600">Cancel</button>
-          <button onClick={handleCreate}
-            className="flex-1 py-2 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700">
-            Create File
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Edit File Modal ──────────────────────────────────────────────────────────
-const EditFileModal = ({ file, onSave, onCancel }) => {
-  const [content, setContent] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [language, setLanguage] = useState('text');
-
-  useEffect(() => {
-    if (!file?.public_url) {
-      setLoading(false);
-      return;
-    }
-
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (['py'].includes(ext)) setLanguage('python');
-    else if (['html'].includes(ext)) setLanguage('html');
-    else if (['css'].includes(ext)) setLanguage('css');
-    else if (['js','jsx','ts','tsx','json'].includes(ext)) setLanguage('javascript');
-    else if (['md'].includes(ext)) setLanguage('markdown');
-
-    fetch(file.public_url)
-      .then(res => (res.ok ? res.text() : ''))
-      .then(text => setContent(text))
-      .catch(() => setContent(''))
-      .finally(() => setLoading(false));
-  }, [file]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave(file, content);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl p-6 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-900 flex items-center gap-2">
-            <FaEdit className="text-primary-500" /> {file?.name}
-          </h3>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-600">Language</label>
-            <select value={language} onChange={e => setLanguage(e.target.value)}
-              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-gray-50">
-              <option value="text">Text</option>
-              <option value="python">Python</option>
-              <option value="html">HTML</option>
-              <option value="css">CSS</option>
-              <option value="javascript">JavaScript</option>
-              <option value="markdown">Markdown</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex-1 min-h-[360px] border border-gray-200 rounded-xl overflow-hidden">
-          {loading ? (
-            <div className="h-full flex items-center justify-center text-gray-500">Loading file…</div>
-          ) : (
-            <CodeMirror
-              value={content}
-              height="360px"
-              theme={oneDark}
-              extensions={language === 'python' ? [python()] : []}
-              onChange={(value) => setContent(value)}
-              basicSetup={{ lineNumbers: true, foldGutter: true, autocompletion: true }}
-            />
-          )}
-        </div>
-
-        <div className="flex gap-3 mt-4">
-          <button onClick={onCancel} className="flex-1 py-2 border border-gray-300 rounded-xl text-sm text-gray-600">Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-2 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-60">
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -433,7 +250,6 @@ const ShareModal = ({ file, onShare, onCancel }) => {
 // ── Main FileManagerPage ──────────────────────────────────────────────────────
 const FileManagerPage = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const isAdmin = user?.email === 'fezaclub@gmail.com';
 
   const [files, setFiles]           = useState([]);
@@ -446,10 +262,8 @@ const FileManagerPage = () => {
   const [search, setSearch]         = useState('');
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [previewFile, setPreviewFile] = useState(null);
-  const [editingFile, setEditingFile] = useState(null);
   const [shareFile, setShareFile]   = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
-  const [showNewFile, setShowNewFile] = useState(false);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [renaming, setRenaming]     = useState(null);
   const [renameVal, setRenameVal]   = useState('');
@@ -466,13 +280,17 @@ const FileManagerPage = () => {
 
   const fetchFiles = async () => {
     setLoading(true);
-    const { data } = await supabase
+    // Normalize path before querying — prevents trailing slash mismatch in prod
+    const queryPath = currentPath === '/' ? '/' :
+      (currentPath.endsWith('/') ? currentPath : currentPath + '/');
+    const { data, error } = await supabase
       .from('file_manager')
       .select('*')
       .eq('owner_id', user.id)
-      .eq('folder_path', currentPath)
+      .eq('folder_path', queryPath)
       .order('is_folder', { ascending: false })
       .order('name');
+    if (error) console.error('fetchFiles error:', error);
     setFiles(data || []);
     setLoading(false);
   };
@@ -483,8 +301,33 @@ const FileManagerPage = () => {
       .select('*, file_manager(*)')
       .or(`shared_to.eq.${user.id},shared_to.is.null`)
       .order('shared_at', { ascending: false });
-    setSharedFiles(data || []);
-    setUnreadShares((data || []).filter(s => !s.is_read).length);
+
+    if (!data) { setSharedFiles([]); return; }
+
+    // For each shared file, regenerate a fresh signed URL so it works for all users
+    // The stored public_url belongs to the uploader — students need a separate link
+    const enriched = await Promise.all(data.map(async (share) => {
+      const file = share.file_manager;
+      if (!file || !file.storage_path) return share;
+      try {
+        // Try signed URL first (works for private buckets)
+        const { data: signed } = await supabase.storage
+          .from('file-manager')
+          .createSignedUrl(file.storage_path, 60 * 60 * 24); // 24 hours
+        if (signed?.signedUrl) {
+          return { ...share, file_manager: { ...file, public_url: signed.signedUrl } };
+        }
+        // Fallback: use public URL (works if bucket is public)
+        const { data: { publicUrl } } = supabase.storage
+          .from('file-manager').getPublicUrl(file.storage_path);
+        return { ...share, file_manager: { ...file, public_url: publicUrl } };
+      } catch {
+        return share;
+      }
+    }));
+
+    setSharedFiles(enriched);
+    setUnreadShares(enriched.filter(s => !s.is_read).length);
   };
 
   const subscribeToShares = () => {
@@ -502,21 +345,6 @@ const FileManagerPage = () => {
     if (!user) { toast.error('Please log in'); return; }
     const files = Array.from(fileList);
     if (!files.length) return;
-
-    const invalidFiles = files.filter((f) => {
-      const isVideo = f.type.startsWith('video/');
-      const isImage = f.type.startsWith('image/');
-      return isVideo || (isImage && f.size > 1 * 1024 * 1024);
-    });
-
-    if (invalidFiles.length > 0) {
-      const message = invalidFiles.map((f) => {
-        if (f.type.startsWith('video/')) return `${f.name} is a video and cannot be uploaded`;
-        return `${f.name} is an image larger than 1MB`;
-      }).join('; ');
-      toast.error(message);
-      return;
-    }
 
     // Check 50MB limit per file
     for (const f of files) {
@@ -540,10 +368,12 @@ const FileManagerPage = () => {
         const { data: { publicUrl } } = supabase.storage
           .from('file-manager').getPublicUrl(storagePath);
 
+        const uploadFolderPath = currentPath === '/' ? '/' :
+          (currentPath.endsWith('/') ? currentPath : currentPath + '/');
         const { error: dbErr } = await supabase.from('file_manager').insert({
           owner_id: user.id,
           name: safeName,
-          folder_path: currentPath,
+          folder_path: uploadFolderPath,
           file_type: getFileType(file.name),
           size_bytes: file.size,
           storage_path: storagePath,
@@ -576,136 +406,43 @@ const FileManagerPage = () => {
   // ── Create folder ───────────────────────────────────────────────
   const createFolder = async (name) => {
     setShowNewFolder(false);
-    const safeName = sanitizeFileName(name);
+    // Store the CURRENT path (normalized) as folder_path
+    const queryPath = currentPath === '/' ? '/' :
+      (currentPath.endsWith('/') ? currentPath : currentPath + '/');
     const { error } = await supabase.from('file_manager').insert({
       owner_id: user.id,
-      name: safeName,
-      folder_path: currentPath,
+      name,
+      folder_path: queryPath,
       file_type: 'folder',
       is_folder: true,
     });
     if (error && error.code === '23505') { toast.error('A folder with that name already exists'); return; }
     if (error) { toast.error('Failed to create folder'); return; }
-    toast.success(`Folder "${safeName}" created`);
+    toast.success(`Folder "${name}" created`);
     fetchFiles();
   };
 
-  const createFile = async ({ name, content }) => {
-    setShowNewFile(false);
-    const safeName = sanitizeFileName(name);
-    const finalName = ensureFileExtension(safeName);
-    const storagePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}-${finalName}`;
-
-    try {
-      const { error: upErr } = await supabase.storage.from('file-manager').upload(storagePath, new Blob([content], { type: 'text/plain' }), {
-        contentType: 'text/plain',
-      });
-      if (upErr) throw upErr;
-
-      const { data: { publicUrl } } = supabase.storage.from('file-manager').getPublicUrl(storagePath);
-      const { error: dbErr } = await supabase.from('file_manager').insert({
-        owner_id: user.id,
-        name: finalName,
-        folder_path: currentPath,
-        file_type: getFileType(finalName),
-        size_bytes: new Blob([content]).size,
-        storage_path: storagePath,
-        public_url: publicUrl,
-        is_folder: false,
-      });
-
-      if (dbErr && dbErr.code === '23505') {
-        toast.error('A file with that name already exists');
-        return;
-      }
-      if (dbErr) throw dbErr;
-
-      toast.success(`File "${finalName}" created`);
-      await fetchFiles();
-      if (isEditableTextFile(finalName)) {
-        navigate(`/student/files/${(await supabase.from('file_manager').select('id').eq('owner_id', user.id).eq('storage_path', storagePath).single()).data?.id}/edit`);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to create file');
-    }
-  };
-
-  const saveEditedFile = async (file, content) => {
-    if (!file?.storage_path) {
-      toast.error('This file cannot be edited');
-      return;
-    }
-
-    try {
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      const { error: upErr } = await supabase.storage.from('file-manager').upload(file.storage_path, blob, {
-        upsert: true,
-        contentType: 'text/plain;charset=utf-8',
-      });
-      if (upErr) throw upErr;
-
-      const { data: { publicUrl } } = supabase.storage.from('file-manager').getPublicUrl(file.storage_path);
-      const { error: dbErr } = await supabase.from('file_manager').update({
-        size_bytes: blob.size,
-        public_url: publicUrl,
-      }).eq('id', file.id).eq('owner_id', user.id);
-
-      if (dbErr) throw dbErr;
-
-      setFiles(prev => prev.map(item => item.id === file.id ? { ...item, size_bytes: blob.size, public_url: publicUrl } : item));
-      setEditingFile(null);
-      toast.success(`Saved "${file.name}"`);
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to save changes');
-    }
-  };
-
   // ── Navigate into folder ────────────────────────────────────────
+  const normalizePath = (p) => {
+    // Ensure path always starts with / and ends with /
+    let normalized = p.startsWith('/') ? p : '/' + p;
+    normalized = normalized.endsWith('/') ? normalized : normalized + '/';
+    return normalized;
+  };
+
   const openFolder = (folder) => {
-    const newPath = currentPath === '/' ? `/${folder.name}/` : `${currentPath}${folder.name}/`;
+    const newPath = normalizePath(
+      currentPath === '/' ? `/${folder.name}` : `${currentPath}${folder.name}`
+    );
     setCurrentPath(newPath);
     setSelectedFiles(new Set());
-  };
-
-  const openFile = async (file) => {
-    if (file.is_folder) {
-      if (view === 'shared' && file.name) {
-        const folderPath = currentPath === '/' ? `/${file.name}/` : `${currentPath}${file.name}/`;
-        setCurrentPath(folderPath);
-        setSelectedFiles(new Set());
-      } else {
-        openFolder(file);
-      }
-      return;
-    }
-
-    if (isLinkCardFile(file.name)) {
-      try {
-        const response = await fetch(file.public_url);
-        const text = response.ok ? await response.text() : '';
-        const info = getLinkCardInfo(file.name, text);
-        if (info?.url) {
-          window.open(info.url, '_blank', 'noopener,noreferrer');
-          return;
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    if (isEditableTextFile(file.name)) {
-      navigate(`/student/files/${file.id}/edit`);
-      return;
-    }
-
-    setPreviewFile(file);
+    setSearch('');
   };
 
   // ── Breadcrumb navigation ───────────────────────────────────────
   const getBreadcrumbs = () => {
-    const parts = currentPath.split('/').filter(Boolean);
+    const normalized = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+    const parts = normalized.split('/').filter(Boolean);
     const crumbs = [{ label: 'My Files', path: '/' }];
     let built = '/';
     parts.forEach(p => { built += p + '/'; crumbs.push({ label: p, path: built }); });
@@ -763,33 +500,25 @@ const FileManagerPage = () => {
   // ── Share file (admin) ──────────────────────────────────────────
   const shareFileToStudents = async (file, recipients, message) => {
     setShareFile(null);
-    const toastId = toast.loading(file.is_folder ? 'Sharing folder...' : 'Sharing...');
+    const toastId = toast.loading('Sharing...');
     try {
       // Mark file as admin-shared
       await supabase.from('file_manager').update({ is_shared_by_admin: true }).eq('id', file.id);
 
-      const filesToShare = file.is_folder
-        ? (await supabase.from('file_manager').select('*').eq('owner_id', user.id)).data || []
-        : [file];
-
-      const folderPath = file.is_folder
-        ? (file.folder_path === '/' ? `/${file.name}/` : `${file.folder_path}${file.name}/`)
-        : null;
-
-      const targets = file.is_folder
-        ? filesToShare.filter(item => item.id === file.id || item.folder_path === folderPath || item.folder_path.startsWith(folderPath))
-        : filesToShare;
-
-      const inserts = (recipients === null ? [null] : recipients).flatMap(recipient =>
-        targets.map(item => ({ file_id: item.id, shared_by: user.id, shared_to: recipient, message }))
-      );
-
-      if (inserts.length) {
+      if (recipients === null) {
+        // Share to all
+        await supabase.from('file_shares').insert({
+          file_id: file.id, shared_by: user.id, shared_to: null, message
+        });
+      } else {
+        // Share to specific students
+        const inserts = recipients.map(uid => ({
+          file_id: file.id, shared_by: user.id, shared_to: uid, message
+        }));
         await supabase.from('file_shares').insert(inserts);
       }
-
       toast.dismiss(toastId);
-      toast.success(file.is_folder ? 'Folder shared with students!' : (recipients === null ? 'Shared with all students!' : `Shared with ${recipients.length} student(s)!`));
+      toast.success(recipients === null ? 'Shared with all students!' : `Shared with ${recipients.length} student(s)!`);
     } catch (err) {
       toast.dismiss(toastId);
       toast.error('Share failed: ' + err.message);
@@ -957,10 +686,6 @@ const FileManagerPage = () => {
                   <FaTrash size={12} /> Delete ({selectedFiles.size})
                 </button>
               )}
-              <button onClick={() => setShowNewFile(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
-                <FaPlus size={11} /> File
-              </button>
               <button onClick={() => setShowNewFolder(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
                 <FaPlus size={11} /> Folder
@@ -1014,11 +739,8 @@ const FileManagerPage = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {displayFiles.map(file => (
                   <FileGridCard key={file.id} file={file} selected={selectedFiles.has(file.id)}
-                    onSelect={toggleSelect} onOpen={() => openFile(file)}
-                    onDelete={() => deleteFile(file)} onShare={() => setShareFile(file)} onEdit={() => {
-                      if (isEditableTextFile(file.name)) navigate(`/student/files/${file.id}/edit`);
-                      else setEditingFile(file);
-                    }}
+                    onSelect={toggleSelect} onOpen={() => file.is_folder ? openFolder(file) : setPreviewFile(file)}
+                    onDelete={() => deleteFile(file)} onShare={() => setShareFile(file)}
                     onRename={() => { setRenaming(file.id); setRenameVal(file.name.replace(/\.py$/,'')); }}
                     isAdmin={isAdmin} renaming={renaming===file.id} renameVal={renameVal}
                     setRenameVal={setRenameVal} onRenameConfirm={() => confirmRename(file)}
@@ -1029,11 +751,8 @@ const FileManagerPage = () => {
               <div className="space-y-1">
                 {displayFiles.map(file => (
                   <FileListRow key={file.id} file={file} selected={selectedFiles.has(file.id)}
-                    onSelect={toggleSelect} onOpen={() => openFile(file)}
-                    onDelete={() => deleteFile(file)} onShare={() => setShareFile(file)} onEdit={() => {
-                      if (isEditableTextFile(file.name)) navigate(`/student/files/${file.id}/edit`);
-                      else setEditingFile(file);
-                    }}
+                    onSelect={toggleSelect} onOpen={() => file.is_folder ? openFolder(file) : setPreviewFile(file)}
+                    onDelete={() => deleteFile(file)} onShare={() => setShareFile(file)}
                     onRename={() => { setRenaming(file.id); setRenameVal(file.name); }}
                     isAdmin={isAdmin} renaming={renaming===file.id} renameVal={renameVal}
                     setRenameVal={setRenameVal} onRenameConfirm={() => confirmRename(file)}
@@ -1060,7 +779,7 @@ const FileManagerPage = () => {
                     <div key={share.id}
                       className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition cursor-pointer
                         ${!share.is_read ? 'border-primary-300 bg-primary-50/30' : 'border-gray-200'}`}
-                      onClick={() => openFile(file)}>
+                      onClick={() => setPreviewFile(file)}>
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${FILE_ICONS[getFileType(file.name)]?.bg || 'bg-gray-50'}`}>
                         <FileIcon name={file.name} size={24} />
                       </div>
@@ -1102,11 +821,8 @@ const FileManagerPage = () => {
               <div className="space-y-1">
                 {recentFiles.map(file => (
                   <FileListRow key={file.id} file={file} selected={false}
-                    onSelect={() => {}} onOpen={() => openFile(file)}
-                    onDelete={() => deleteFile(file)} onShare={() => setShareFile(file)} onEdit={() => {
-                      if (isEditableTextFile(file.name)) navigate(`/student/files/${file.id}/edit`);
-                      else setEditingFile(file);
-                    }}
+                    onSelect={() => {}} onOpen={() => file.is_folder ? openFolder(file) : setPreviewFile(file)}
+                    onDelete={() => deleteFile(file)} onShare={() => setShareFile(file)}
                     onRename={() => {}} isAdmin={isAdmin}
                     renaming={false} renameVal="" setRenameVal={() => {}}
                     onRenameConfirm={() => {}} onRenameCancel={() => {}} />
@@ -1118,12 +834,7 @@ const FileManagerPage = () => {
       </div>
 
       {/* ── Modals ───────────────────────────────────────────────── */}
-      {previewFile && <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} onEdit={() => {
-        if (isEditableTextFile(previewFile.name)) navigate(`/student/files/${previewFile.id}/edit`);
-        else setEditingFile(previewFile);
-      }} />}
-      {editingFile && <EditFileModal file={editingFile} onSave={saveEditedFile} onCancel={() => setEditingFile(null)} />}
-      {showNewFile && <NewFileModal onConfirm={createFile} onCancel={() => setShowNewFile(false)} />}
+      {previewFile && <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
       {showNewFolder && <NewFolderModal onConfirm={createFolder} onCancel={() => setShowNewFolder(false)} />}
       {confirmModal && <ConfirmModal {...confirmModal} onCancel={() => setConfirmModal(null)} />}
       {shareFile && <ShareModal file={shareFile} onShare={shareFileToStudents} onCancel={() => setShareFile(null)} />}
@@ -1132,7 +843,7 @@ const FileManagerPage = () => {
 };
 
 // ── Grid card ─────────────────────────────────────────────────────────────────
-const FileGridCard = ({ file, selected, onSelect, onOpen, onDelete, onShare, onEdit, onRename, isAdmin, renaming, renameVal, setRenameVal, onRenameConfirm, onRenameCancel }) => {
+const FileGridCard = ({ file, selected, onSelect, onOpen, onDelete, onShare, onRename, isAdmin, renaming, renameVal, setRenameVal, onRenameConfirm, onRenameCancel }) => {
   const type = getFileType(file.name);
   const cfg  = FILE_ICONS[type] || FILE_ICONS.file;
   return (
@@ -1182,14 +893,9 @@ const FileGridCard = ({ file, selected, onSelect, onOpen, onDelete, onShare, onE
             <FaDownload size={11} />
           </a>
         )}
-        {isAdmin && (
+        {isAdmin && !file.is_folder && (
           <button onClick={onShare} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:text-green-600 transition">
             <FaShare size={11} />
-          </button>
-        )}
-        {isEditableTextFile(file.name) && (
-          <button onClick={onEdit} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:text-blue-600 transition">
-            <FaEdit size={11} />
           </button>
         )}
         <button onClick={onRename} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:text-blue-600 transition">
@@ -1204,7 +910,7 @@ const FileGridCard = ({ file, selected, onSelect, onOpen, onDelete, onShare, onE
 };
 
 // ── List row ──────────────────────────────────────────────────────────────────
-const FileListRow = ({ file, selected, onSelect, onOpen, onDelete, onShare, onEdit, onRename, isAdmin, renaming, renameVal, setRenameVal, onRenameConfirm, onRenameCancel }) => (
+const FileListRow = ({ file, selected, onSelect, onOpen, onDelete, onShare, onRename, isAdmin, renaming, renameVal, setRenameVal, onRenameConfirm, onRenameCancel }) => (
   <div
     className={`group flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all
       ${selected ? 'bg-primary-50 border border-primary-200' : 'bg-white border border-transparent hover:bg-gray-50 hover:border-gray-200'}`}
@@ -1245,14 +951,9 @@ const FileListRow = ({ file, selected, onSelect, onOpen, onDelete, onShare, onEd
           <FaDownload size={13} />
         </a>
       )}
-      {isAdmin && (
+      {isAdmin && !file.is_folder && (
         <button onClick={onShare} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition">
           <FaShare size={13} />
-        </button>
-      )}
-      {isEditableTextFile(file.name) && (
-        <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
-          <FaEdit size={13} />
         </button>
       )}
       <button onClick={onRename} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">

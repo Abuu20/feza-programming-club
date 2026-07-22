@@ -3,11 +3,9 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 import {
   FaTrophy, FaClock, FaCheck, FaTimes, FaFire, FaMedal,
-  FaStar, FaLock, FaSpinner, FaUsers, FaBolt, FaChartBar,
-  FaTimesCircle   // for close button
+  FaStar, FaLock, FaSpinner, FaUsers, FaBolt, FaChartBar
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
@@ -16,6 +14,122 @@ const OPTION_COLORS = {
   B: { base: 'border-purple-200 bg-purple-50 text-purple-800', active: 'border-purple-500 bg-purple-500 text-white', correct: 'border-green-500 bg-green-500 text-white', wrong: 'border-red-400  bg-red-400  text-white' },
   C: { base: 'border-orange-200 bg-orange-50 text-orange-800', active: 'border-orange-500 bg-orange-500 text-white', correct: 'border-green-500 bg-green-500 text-white', wrong: 'border-red-400  bg-red-400  text-white' },
   D: { base: 'border-teal-200   bg-teal-50   text-teal-800',   active: 'border-teal-500   bg-teal-500   text-white', correct: 'border-green-500 bg-green-500 text-white', wrong: 'border-red-400  bg-red-400  text-white' },
+};
+
+// ── Zoomable Image ────────────────────────────────────────────────────────────
+const ImageZoom = ({ src, alt = 'Question image' }) => {
+  const [zoomed, setZoomed] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const imgRef = useRef(null);
+
+  // Reset on close
+  const close = () => { setZoomed(false); setScale(1); setPos({ x: 0, y: 0 }); };
+
+  // Wheel zoom inside modal
+  const onWheel = (e) => {
+    e.preventDefault();
+    setScale(s => Math.min(5, Math.max(1, s - e.deltaY * 0.005)));
+  };
+
+  // Drag inside modal
+  const onMouseDown = (e) => { setDragging(true); setDragStart({ x: e.clientX - pos.x, y: e.clientY - pos.y }); };
+  const onMouseMove = (e) => { if (dragging) setPos({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); };
+  const onMouseUp   = () => setDragging(false);
+
+  // Double click to zoom in/out
+  const onDblClick  = () => { setScale(s => s > 1 ? 1 : 2.5); setPos({ x: 0, y: 0 }); };
+
+  return (
+    <>
+      {/* Thumbnail — click to open zoom modal */}
+      <div className="relative group cursor-zoom-in" onClick={() => setZoomed(true)}>
+        <img
+          src={src} alt={alt}
+          className="w-full rounded-2xl border border-white/20 select-none object-contain max-h-72"
+          draggable={false}
+          onContextMenu={e => e.preventDefault()}
+          style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+        />
+        {/* Zoom hint overlay */}
+        <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+          <div className="opacity-0 group-hover:opacity-100 transition-all bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+            </svg>
+            Click to zoom
+          </div>
+        </div>
+      </div>
+
+      {/* Fullscreen zoom modal */}
+      {zoomed && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}
+          onClick={e => { if (e.target === e.currentTarget) close(); }}>
+
+          {/* Controls */}
+          <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+            <div className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-full">
+              {Math.round(scale * 100)}% • Scroll or pinch to zoom • Drag to pan
+            </div>
+            <button onClick={close}
+              className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-full transition">
+              <FaTimes size={16} />
+            </button>
+          </div>
+
+          {/* Zoom buttons */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10">
+            <button onClick={() => { setScale(s => Math.max(1, s - 0.5)); setPos({x:0,y:0}); }}
+              className="bg-white/20 hover:bg-white/30 text-white w-10 h-10 rounded-full text-xl font-bold transition flex items-center justify-center">
+              −
+            </button>
+            <button onClick={() => { setScale(1); setPos({x:0,y:0}); }}
+              className="bg-white/20 hover:bg-white/30 text-white px-4 h-10 rounded-full text-xs font-semibold transition">
+              Reset
+            </button>
+            <button onClick={() => setScale(s => Math.min(5, s + 0.5))}
+              className="bg-white/20 hover:bg-white/30 text-white w-10 h-10 rounded-full text-xl font-bold transition flex items-center justify-center">
+              +
+            </button>
+          </div>
+
+          {/* The image */}
+          <div
+            className="overflow-hidden w-full h-full flex items-center justify-center"
+            onWheel={onWheel}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+            onDoubleClick={onDblClick}
+            style={{ cursor: scale > 1 ? (dragging ? 'grabbing' : 'grab') : 'zoom-in' }}>
+            <img
+              ref={imgRef}
+              src={src}
+              alt={alt}
+              draggable={false}
+              onContextMenu={e => e.preventDefault()}
+              style={{
+                transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`,
+                transition: dragging ? 'none' : 'transform 0.15s ease',
+                maxWidth: '90vw',
+                maxHeight: '85vh',
+                objectFit: 'contain',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'none',
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
 };
 
 // ── Leaderboard entry ─────────────────────────────────────────────────────────
@@ -48,25 +162,16 @@ const QuizPage = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState({});
-  const [submitted, setSubmitted] = useState({});
-  const [results, setResults] = useState({});
+  const [answers, setAnswers] = useState({}); // { questionId: 'A'|'B'|'C'|'D' }
+  const [submitted, setSubmitted] = useState({}); // { questionId: true }
+  const [results, setResults] = useState({}); // { questionId: { correct, pointsEarned } }
   const [leaderboard, setLeaderboard] = useState([]);
   const [timeLeft, setTimeLeft] = useState(null);
-  const [phase, setPhase] = useState('lobby');
+  const [phase, setPhase] = useState('lobby'); // lobby | active | ended | results
   const [loading, setLoading] = useState(true);
   const [newLeaderEntry, setNewLeaderEntry] = useState(null);
   const [myScore, setMyScore] = useState({ points: 0, correct: 0 });
-  const [zoomedImage, setZoomedImage] = useState(null); // NEW for zoom
-
-  useEffect(() => {
-    if (!zoomedImage) return undefined;
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setZoomedImage(null);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [zoomedImage]);
+  const [showExplanation, setShowExplanation] = useState({});
 
   const timerRef = useRef(null);
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student';
@@ -89,6 +194,7 @@ const QuizPage = () => {
       .limit(10);
     setSessions(data || []);
     setLoading(false);
+    // Auto-join active session
     const active = (data || []).find(s => s.status === 'active');
     if (active && (!activeSession || activeSession.id !== active.id)) {
       joinSession(active);
@@ -189,6 +295,7 @@ const QuizPage = () => {
     const isCorrect = answer === question.correct_answer;
     const pointsEarned = isCorrect ? question.points : 0;
 
+    // Optimistic UI
     setSubmitted(p => ({ ...p, [question.id]: true }));
     setResults(p => ({ ...p, [question.id]: { correct: isCorrect, pointsEarned, correctAnswer: question.correct_answer } }));
     setMyScore(p => ({
@@ -217,6 +324,7 @@ const QuizPage = () => {
       }
     }
 
+    // Auto-advance after 1.5s
     if (currentQ < questions.length - 1) {
       setTimeout(() => setCurrentQ(p => p + 1), 1500);
     }
@@ -335,31 +443,11 @@ const QuizPage = () => {
                       </span>
                     </div>
 
-                    {/* Question content – with zoomable image */}
+                    {/* Question content */}
                     {q.type === 'image' && q.question_image_url ? (
                       <div>
                         <p className="text-white font-semibold mb-3 text-lg">{q.question_text}</p>
-                        <div className="relative">
-                          <img
-                            src={q.question_image_url}
-                            alt="Question"
-                            className="w-full rounded-2xl max-h-[70vh] object-contain bg-white/10 select-none cursor-zoom-in transition hover:brightness-110"
-                            draggable={false}
-                            onClick={() => setZoomedImage(q.question_image_url)}
-                            onContextMenu={e => e.preventDefault()}
-                            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setZoomedImage(q.question_image_url)}
-                            className="absolute top-4 right-4 inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-2 text-xs text-white font-semibold backdrop-blur transition hover:bg-black/80"
-                          >
-                            Zoom image
-                          </button>
-                        </div>
-                        <p className="text-xs text-primary-300 mt-2 text-center opacity-60">
-                          Tap the image or the button to open zoom view
-                        </p>
+                        <ImageZoom src={q.question_image_url} alt="Question" />
                       </div>
                     ) : (
                       <p className="text-white font-bold text-xl leading-relaxed select-none"
@@ -592,77 +680,6 @@ const QuizPage = () => {
           </div>
         </div>
       </div>
-
-      {/* ── Image Zoom Modal ────────────────────────────────────── */}
-      {zoomedImage && (
-        <div
-          className="fixed inset-0 z-[999] bg-black/80 flex items-center justify-center p-4 cursor-zoom-out"
-          onClick={() => setZoomedImage(null)}
-        >
-          <div
-            className="relative w-full h-full max-w-[95vw] max-h-[95vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Close button */}
-            <button
-              onClick={() => setZoomedImage(null)}
-              className="absolute top-4 right-4 z-[1000] text-white/70 hover:text-white bg-black/30 hover:bg-black/50 rounded-full p-2 transition"
-              aria-label="Close zoom"
-            >
-              <FaTimesCircle size={28} />
-            </button>
-
-            <TransformWrapper
-              initialScale={1}
-              minScale={0.5}
-              maxScale={5}
-              centerOnInit
-              pinch={{ step: 5 }}
-              wheel={{ step: 0.2 }}
-            >
-              {({ zoomIn, zoomOut, resetTransform }) => (
-                <>
-                  <div className="absolute left-4 top-4 z-[1000] flex items-center gap-2 rounded-full bg-black/40 p-2 backdrop-blur text-white text-xs">
-                    <button
-                      type="button"
-                      onClick={zoomIn}
-                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      onClick={zoomOut}
-                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetTransform}
-                      className="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20 transition"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                  <TransformComponent
-                    wrapperStyle={{ width: '100%', height: '100%' }}
-                    contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <img
-                      src={zoomedImage}
-                      alt="Zoomed question"
-                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none"
-                      draggable={false}
-                      style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-                    />
-                  </TransformComponent>
-                </>
-              )}
-            </TransformWrapper>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

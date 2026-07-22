@@ -26,18 +26,14 @@ import UpdatePassword from './pages/UpdatePassword';
 import WelcomeModal from './components/common/WelcomeModal';
 import ChatPage from './pages/ChatPage';
 import QuizPage from './pages/QuizPage';
-import FileManagerPage from './pages/FileManagerPage';
-import FileEditorPage from './pages/FileEditorPage';
-
-
 
 // Student Pages
 import StudentLogin from './pages/student/StudentLogin';
-import StudentRegister from './pages/student/StudentRegister';
+import StudentRegister from './pages/student/StudentRegister';  // has password + approval
 import StudentDashboard from './pages/student/StudentDashboard';
-import RegistrationRequest from './pages/student/RegistrationRequest';
 import MemberProfile from './pages/student/MemberProfile';
 import MembersManagePage from './pages/student/MembersManagePage';
+import FileManagerPage from './pages/FileManagerPage';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -64,7 +60,7 @@ function App() {
       <Router>
         <AuthProvider>
           <Toaster position="top-right" />
-            <WelcomeModal />
+          <WelcomeModal />
           <Routes>
             {/* Public Routes */}
             <Route element={<PublicLayout />}>
@@ -84,11 +80,10 @@ function App() {
               <Route path="/update-password" element={<UpdatePassword />} />
               <Route path="/quiz" element={<QuizPage />} />
 
-              
-              {/* Student Auth Routes */}
+              {/* Student Auth — both paths go to same register page */}
               <Route path="/student/login" element={<StudentLogin />} />
               <Route path="/student/register" element={<StudentRegister />} />
-              <Route path="/student/request" element={<RegistrationRequest />} />
+              <Route path="/student/request" element={<StudentRegister />} />
             </Route>
 
             {/* Protected Student Routes */}
@@ -96,11 +91,8 @@ function App() {
               <Route element={<PublicLayout />}>
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
                 <Route path="/student/profile" element={<MemberProfile />} />
-                <Route path="/student/members-manage" element={<MembersManagePage />} />  
+                <Route path="/student/members-manage" element={<MembersManagePage />} />
                 <Route path="/student/files" element={<FileManagerPage />} />
-                <Route path="/student/files/:fileId/edit" element={<FileEditorPage />} />
-
-
               </Route>
             </Route>
 

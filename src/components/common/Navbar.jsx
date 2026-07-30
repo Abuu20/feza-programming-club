@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   CodeBracketIcon,
   HomeIcon,
@@ -21,8 +21,19 @@ import { useAuth } from '../../hooks/useAuth';
 const Navbar = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
+  const [hasScrolled, setHasScrolled] = useState(false);
+
+  const isHome = pathname === '/';
+
+  useEffect(() => {
+    const updateScrollState = () => setHasScrolled(window.scrollY > 28);
+    updateScrollState();
+    window.addEventListener('scroll', updateScrollState, { passive: true });
+    return () => window.removeEventListener('scroll', updateScrollState);
+  }, [pathname]);
 
   // Unread count logic (unchanged)
   useEffect(() => {
@@ -94,12 +105,16 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="bg-primary-500 text-white shadow-lg sticky top-0 z-50">
+    <nav className={`sticky top-0 z-50 text-white transition-all duration-500 ${
+      isHome && !hasScrolled
+        ? 'border-b border-white/10 bg-[#001534]/35 backdrop-blur-md shadow-none'
+        : 'border-b border-white/10 bg-primary-500/95 backdrop-blur-xl shadow-[0_10px_30px_rgba(0,16,42,0.26)]'
+    }`}>
       <div className="container-custom">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group flex-shrink-0">
-            <div className="bg-secondary-500 p-2 rounded-lg transform group-hover:rotate-12 transition">
+            <div className="bg-secondary-500 p-2 rounded-lg transform shadow-[0_0_22px_rgba(253,185,19,0.25)] group-hover:rotate-12 transition">
               <CodeBracketIcon className="w-5 h-5 text-primary-500" />
             </div>
             <span className="font-bold text-lg hidden sm:block">
@@ -111,11 +126,11 @@ const Navbar = () => {
           <div className="hidden lg:flex items-center gap-4">
             <div className="relative group">
               {/* Main "Explore" Button */}
-              <button className="px-4 py-2 rounded-lg hover:bg-primary-600 transition flex items-center gap-2 text-sm font-medium">
+              <button className="px-4 py-2 rounded-lg hover:bg-white/10 transition flex items-center gap-2 text-sm font-medium">
                 <span className="relative inline-flex">
                   <Bars3Icon className="w-5 h-5" />
                   {chatUnread > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-md ring-2 ring-primary-500">
+                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-md ring-2 ring-primary-500">
                       {chatUnread > 99 ? '99+' : chatUnread}
                     </span>
                   )}
@@ -252,7 +267,7 @@ const Navbar = () => {
               <>
                 <Link
                   to="/student/login"
-                  className="hover:bg-primary-600 px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap"
+                  className="hover:bg-white/10 px-4 py-2 rounded-lg transition flex items-center gap-2 whitespace-nowrap"
                 >
                   <UserIcon className="w-4 h-4" />
                   <span>Login</span>
@@ -271,7 +286,7 @@ const Navbar = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="lg:hidden p-2 rounded-lg hover:bg-primary-600 transition"
+            className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {isMenuOpen ? (

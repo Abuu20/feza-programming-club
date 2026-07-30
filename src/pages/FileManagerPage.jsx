@@ -80,8 +80,6 @@ const ConfirmModal = ({ title, message, confirmLabel='Delete', confirmColor='bg-
 // ── File Preview Modal ────────────────────────────────────────────────────────
 const PreviewModal = ({ file, onClose }) => {
   const type = getFileType(file.name);
-  // Use access_url (signed) if available, fallback to public_url
-  const url = file.access_url || file.public_url;
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex flex-col" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="flex items-center justify-between px-6 py-4 bg-gray-900 flex-shrink-0">
@@ -91,7 +89,7 @@ const PreviewModal = ({ file, onClose }) => {
           <span className="text-gray-400 text-sm">{formatSize(file.size_bytes)}</span>
         </div>
         <div className="flex items-center gap-3">
-          <a href={url} target="_blank" rel="noopener noreferrer" download={file.name}
+          <a href={file.public_url} target="_blank" rel="noopener noreferrer" download={file.name}
             className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white transition">
             <FaDownload size={13} /> Download
           </a>
@@ -100,17 +98,17 @@ const PreviewModal = ({ file, onClose }) => {
       </div>
       <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
         {type === 'image' && (
-          <img src={url} alt={file.name}
+          <img src={file.public_url} alt={file.name}
             className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
         )}
         {type === 'pdf' && (
-          <iframe src={url} title={file.name}
+          <iframe src={file.public_url} title={file.name}
             className="w-full h-full rounded-xl" style={{ minHeight: '80vh' }} />
         )}
-        {type === 'code' && url && (
+        {type === 'code' && file.public_url && (
           <div className="bg-gray-950 text-green-300 rounded-2xl p-6 max-w-3xl w-full max-h-full overflow-auto font-mono text-sm">
             <p className="text-gray-500 mb-3 text-xs">— {file.name} —</p>
-            <a href={url} target="_blank" rel="noopener noreferrer"
+            <a href={file.public_url} target="_blank" rel="noopener noreferrer"
               className="text-primary-400 underline">Open in new tab to view code</a>
           </div>
         )}
@@ -119,7 +117,7 @@ const PreviewModal = ({ file, onClose }) => {
             <FileIcon name={file.name} size={64} className="mx-auto mb-4 opacity-60" />
             <p className="text-lg font-semibold mb-1">{file.name}</p>
             <p className="text-gray-400 mb-6">{formatSize(file.size_bytes)}</p>
-            <a href={url} download={file.name}
+            <a href={file.public_url} download={file.name}
               className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-xl hover:bg-primary-700 transition font-semibold">
               <FaDownload /> Download File
             </a>
@@ -280,17 +278,24 @@ const FileManagerPage = () => {
     if (user) { fetchFiles(); fetchSharedFiles(); subscribeToShares(); }
   }, [user, currentPath]);
 
+  // Normalize path: always /something/ or /
+  const norm = (p) => {
+    if (!p || p === '/') return '/';
+    let s = p.startsWith('/') ? p : '/' + p;
+    return s.endsWith('/') ? s : s + '/';
+  };
+
   const fetchFiles = async () => {
     setLoading(true);
-    const qPath = currentPath === '/' ? '/' : (currentPath.endsWith('/') ? currentPath : currentPath + '/');
+    const queryPath = norm(currentPath);
     const { data, error } = await supabase
       .from('file_manager')
       .select('*')
       .eq('owner_id', user.id)
-      .eq('folder_path', qPath)
+      .eq('folder_path', queryPath)
       .order('is_folder', { ascending: false })
       .order('name');
-    if (error) console.error('fetchFiles error:', error.message, 'path:', qPath);
+    if (error) console.error('fetchFiles error:', error.message, 'path:', queryPath);
     setFiles(data || []);
     setLoading(false);
   };
@@ -301,28 +306,18 @@ const FileManagerPage = () => {
       .select('*, file_manager(*)')
       .or(`shared_to.eq.${user.id},shared_to.is.null`)
       .order('shared_at', { ascending: false });
-
     if (!data) { setSharedFiles([]); setUnreadShares(0); return; }
-
-    // Generate a fresh signed URL for each shared file so students can access it
-    // The stored public_url belongs to the uploader — production blocks cross-user access
-    const enriched = await Promise.all(
-      data.map(async (share) => {
-        const file = share.file_manager;
-        if (!file?.storage_path) return share;
-        try {
-          const { data: signed, error } = await supabase.storage
-            .from('file-manager')
-            .createSignedUrl(file.storage_path, 86400); // 24-hour signed URL
-          if (!error && signed?.signedUrl) {
-            return { ...share, file_manager: { ...file, access_url: signed.signedUrl } };
-          }
-        } catch {}
-        // Fallback to stored public_url
-        return { ...share, file_manager: { ...file, access_url: file.public_url } };
-      })
-    );
-
+    // Generate signed URLs so students can access files uploaded by admin
+    const enriched = await Promise.all(data.map(async (share) => {
+      const file = share.file_manager;
+      if (!file?.storage_path) return share;
+      try {
+        const { data: signed } = await supabase.storage
+          .from('file-manager').createSignedUrl(file.storage_path, 86400);
+        if (signed?.signedUrl) return { ...share, file_manager: { ...file, access_url: signed.signedUrl } };
+      } catch {}
+      return { ...share, file_manager: { ...file, access_url: file.public_url } };
+    }));
     setSharedFiles(enriched);
     setUnreadShares(enriched.filter(s => !s.is_read).length);
   };
@@ -343,32 +338,24 @@ const FileManagerPage = () => {
     const files = Array.from(fileList);
     if (!files.length) return;
 
-    // ── File type and size restrictions ──────────────────────────
-    // Supabase free tier = 1GB total — be conservative
+    const invalidFiles = files.filter((f) => {
+      const isVideo = f.type.startsWith('video/');
+      const isImage = f.type.startsWith('image/');
+      return isVideo || (isImage && f.size > 1 * 1024 * 1024);
+    });
+
+    if (invalidFiles.length > 0) {
+      const message = invalidFiles.map((f) => {
+        if (f.type.startsWith('video/')) return `${f.name} is a video and cannot be uploaded`;
+        return `${f.name} is an image larger than 1MB`;
+      }).join('; ');
+      toast.error(message);
+      return;
+    }
+
+    // Check 50MB limit per file
     for (const f of files) {
-      // Block videos entirely — share links in chat instead
-      if (f.type.startsWith('video/')) {
-        toast.error(`❌ ${f.name}: Videos not allowed. Share a YouTube or Google Drive link in Chat instead.`, { duration: 6000 });
-        return;
-      }
-      // Images: max 5MB
-      if (f.type.startsWith('image/') && f.size > 5*1024*1024) {
-        toast.error(`❌ ${f.name}: Images must be under 5MB. Please compress it first.`, { duration: 5000 });
-        return;
-      }
-      // ZIP / archives: max 20MB
-      const ext = f.name.split('.').pop().toLowerCase();
-      if (['zip','rar','7z','tar','gz'].includes(ext) && f.size > 20*1024*1024) {
-        toast.error(`❌ ${f.name}: Archives must be under 20MB.`, { duration: 5000 });
-        return;
-      }
-      // Everything else: max 10MB
-      if (!f.type.startsWith('image/') && !['zip','rar','7z','tar','gz'].includes(ext)) {
-        if (f.size > 10*1024*1024) {
-          toast.error(`❌ ${f.name}: File must be under 10MB.`, { duration: 5000 });
-          return;
-        }
-      }
+      if (f.size > 50*1024*1024) { toast.error(`${f.name} is too large (max 50MB)`); return; }
     }
 
     setUploading(true);
@@ -388,11 +375,10 @@ const FileManagerPage = () => {
         const { data: { publicUrl } } = supabase.storage
           .from('file-manager').getPublicUrl(storagePath);
 
-        const savePath = currentPath === '/' ? '/' : (currentPath.endsWith('/') ? currentPath : currentPath + '/');
         const { error: dbErr } = await supabase.from('file_manager').insert({
           owner_id: user.id,
           name: safeName,
-          folder_path: savePath,
+          folder_path: norm(currentPath),
           file_type: getFileType(file.name),
           size_bytes: file.size,
           storage_path: storagePath,
@@ -425,11 +411,10 @@ const FileManagerPage = () => {
   // ── Create folder ───────────────────────────────────────────────
   const createFolder = async (name) => {
     setShowNewFolder(false);
-    const savePath = currentPath === '/' ? '/' : (currentPath.endsWith('/') ? currentPath : currentPath + '/');
     const { error } = await supabase.from('file_manager').insert({
       owner_id: user.id,
       name,
-      folder_path: savePath,
+      folder_path: norm(currentPath),  // normalized parent path
       file_type: 'folder',
       is_folder: true,
     });
@@ -439,18 +424,10 @@ const FileManagerPage = () => {
     fetchFiles();
   };
 
-  // ── Normalize path — always /something/ or just / ───────────────
-  const normPath = (p) => {
-    if (!p || p === '/') return '/';
-    let n = p.startsWith('/') ? p : '/' + p;
-    n = n.endsWith('/') ? n : n + '/';
-    return n;
-  };
-
   // ── Navigate into folder ────────────────────────────────────────
   const openFolder = (folder) => {
-    const base = currentPath === '/' ? '' : currentPath.replace(/\/$/, '');
-    const newPath = normPath(base + '/' + folder.name);
+    const base = currentPath === '/' ? '' : currentPath.replace(/\/+$/, '');
+    const newPath = norm(base + '/' + folder.name);
     setCurrentPath(newPath);
     setSelectedFiles(new Set());
     setSearch('');
@@ -458,7 +435,7 @@ const FileManagerPage = () => {
 
   // ── Breadcrumb navigation ───────────────────────────────────────
   const getBreadcrumbs = () => {
-    const parts = currentPath.split('/').filter(Boolean);
+    const parts = norm(currentPath).split('/').filter(Boolean);
     const crumbs = [{ label: 'My Files', path: '/' }];
     let built = '/';
     parts.forEach(p => { built += p + '/'; crumbs.push({ label: p, path: built }); });
@@ -569,7 +546,7 @@ const FileManagerPage = () => {
 
   // ── Storage usage ───────────────────────────────────────────────
   const totalStorage = files.reduce((s, f) => s + (f.size_bytes || 0), 0);
-  const MAX_STORAGE  = 50 * 1024 * 1024; // 50MB per student (conservative for 1GB free tier)
+  const MAX_STORAGE  = 100 * 1024 * 1024; // 100MB per student
   const storagePercent = Math.min(100, (totalStorage / MAX_STORAGE) * 100);
 
   // ── Filtered display ────────────────────────────────────────────
@@ -625,7 +602,7 @@ const FileManagerPage = () => {
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
             <span>Storage</span>
-            <span>{formatSize(totalStorage)} / 50 MB</span>
+            <span>{formatSize(totalStorage)} / 100 MB</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div className={`h-2 rounded-full transition-all ${storagePercent > 80 ? 'bg-red-500' : 'bg-primary-500'}`}

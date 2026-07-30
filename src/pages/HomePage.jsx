@@ -93,13 +93,23 @@ const HomePage = () => {
   const [members, setMembers] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [stats, setStats] = useState({ members:0, challenges:0, lessons:0, submissions:0 });
+  const [galleryImages, setGalleryImages] = useState([]);
+  const [galleryIdx, setGalleryIdx] = useState(0);
+  const [dailyTip, setDailyTip] = useState(null);
   const { activities, loading: loadingActivities } = useActivities();
   const navigate = useNavigate();
 
   useEffect(() => { fetchAll(); }, []);
 
+  // Gallery auto-slide
+  useEffect(() => {
+    if (galleryImages.length < 2) return;
+    const timer = setInterval(() => setGalleryIdx(p => (p+1) % galleryImages.length), 3500);
+    return () => clearInterval(timer);
+  }, [galleryImages.length]);
+
   const fetchAll = async () => {
-    const [ann, mems, lb, sm, sc, sl, ss] = await Promise.all([
+    const [ann, mems, lb, sm, sc, sl, ss, gal] = await Promise.all([
       announcementsService.getLatest(4),
       supabase.from("members").select("id,name,photo_url,role,grade,status").eq("status","active").order("display_order").limit(12),
       supabase.from("challenge_submissions").select("user_id,points_earned,members(name,photo_url)").eq("status","correct").limit(200),
@@ -107,6 +117,7 @@ const HomePage = () => {
       supabase.from("challenges").select("*",{count:"exact",head:true}).eq("is_active",true),
       supabase.from("curriculum").select("*",{count:"exact",head:true}).eq("is_published",true),
       supabase.from("challenge_submissions").select("*",{count:"exact",head:true}),
+      supabase.from("gallery").select("id,image_url,title").order("created_at",{ascending:false}).limit(12),
     ]);
     setAnnouncements(ann.data || []);
     setMembers((mems.data||[]).filter(m => m.status !== "inactive"));
@@ -119,6 +130,18 @@ const HomePage = () => {
     });
     setLeaderboard(Object.values(grouped).sort((a,b)=>b.points-a.points).slice(0,5));
     setStats({ members:sm.count||0, challenges:sc.count||0, lessons:sl.count||0, submissions:ss.count||0 });
+    setGalleryImages((gal.data||[]).filter(g=>g.image_url));
+    // Fetch today's tip
+    const today = new Date().toISOString().split('T')[0];
+    let { data: tip } = await supabase.from('daily_tips').select('*').eq('show_date', today).eq('is_published', true).maybeSingle();
+    if (!tip) {
+      const { data: all } = await supabase.from('daily_tips').select('*').eq('is_published', true).order('created_at', {ascending: false}).limit(30);
+      if (all?.length) {
+        const day = Math.floor((new Date() - new Date(new Date().getFullYear(),0,0)) / 86400000);
+        tip = all[day % all.length];
+      }
+    }
+    setDailyTip(tip);
   };
 
   const handleWhatsApp = (a) => {
@@ -408,6 +431,107 @@ const HomePage = () => {
           </div>
         </section>
       )}
+
+
+      {/* ── DAILY PYTHON TIP ───────────────────────────────────── */}
+      {dailyTip && (
+        <section className="py-16 bg-gradient-to-br from-indigo-50 to-purple-50">
+          <div className="container-custom">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-1.5 rounded-full text-sm font-semibold mb-3">
+                💡 Daily Python Tip
+              </div>
+              <h2 className="text-3xl font-black text-gray-900">Today's Learning Moment</h2>
+            </div>
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-purple-100">
+                {/* Header */}
+                <div className={`p-5 flex items-center gap-4 ${
+                  dailyTip.category==='trick' ? 'bg-gradient-to-r from-purple-600 to-indigo-600' :
+                  dailyTip.category==='motivation' ? 'bg-gradient-to-r from-orange-500 to-red-600' :
+                  dailyTip.category==='syntax' ? 'bg-gradient-to-r from-green-600 to-teal-600' :
+                  'bg-gradient-to-r from-blue-600 to-cyan-600'}`}>
+                  <div className="text-4xl">
+                    {dailyTip.category==='trick'?'✨':dailyTip.category==='motivation'?'🔥':dailyTip.category==='syntax'?'🐍':'🚀'}
+                  </div>
+                  <div>
+                    <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">
+                      {dailyTip.category==='trick'?'Python Trick':dailyTip.category==='motivation'?'Stay Motivated':dailyTip.category==='syntax'?'Python Syntax':'Project Idea'}
+                      {dailyTip.tag && ` · #${dailyTip.tag}`}
+                    </p>
+                    <p className="text-white font-black text-xl">{dailyTip.title}</p>
+                  </div>
+                </div>
+                {/* Body */}
+                <div className="p-6">
+                  {dailyTip.type === 'image' && dailyTip.image_url ? (
+                    <img src={dailyTip.image_url} alt={dailyTip.title}
+                      className="w-full rounded-2xl border border-gray-100 select-none"
+                      draggable={false} onContextMenu={e=>e.preventDefault()}
+                      style={{userSelect:'none',WebkitUserSelect:'none',pointerEvents:'none'}} />
+                  ) : (
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-sm">{dailyTip.content}</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-4 text-right">
+                    📅 {new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── USEFUL PYTHON SITES ─────────────────────────────────── */}
+      <section className="py-20 bg-gray-50">
+        <div className="container-custom">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full text-sm font-semibold mb-4">
+              🌐 Learning Resources
+            </div>
+            <h2 className="text-4xl font-black text-gray-900 mb-3">Useful Python Sites</h2>
+            <p className="text-gray-500 max-w-xl mx-auto">Hand-picked by your teachers — the best places to keep learning Python beyond the club</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {[
+              { name:"PyPI", url:"https://pypi.org", emoji:"📦", color:"from-blue-500 to-blue-700", desc:"Python Package Index — find and install any Python library" },
+              { name:"Python Docs", url:"https://docs.python.org", emoji:"📖", color:"from-yellow-500 to-orange-500", desc:"Official Python documentation and language reference" },
+              { name:"Turtle Graphics", url:"https://docs.python.org/3/library/turtle.html", emoji:"🐢", color:"from-green-500 to-teal-600", desc:"Draw shapes and patterns with Python's turtle module" },
+              { name:"Reeborg's World", url:"https://reeborg.ca/reeborg.html", emoji:"🤖", color:"from-purple-500 to-purple-700", desc:"Learn programming by guiding a robot through mazes" },
+              { name:"W3Schools Python", url:"https://www.w3schools.com/python", emoji:"🏫", color:"from-indigo-500 to-indigo-700", desc:"Beginner-friendly Python tutorials with live examples" },
+              { name:"Programiz", url:"https://www.programiz.com/python-programming", emoji:"🎓", color:"from-cyan-500 to-blue-600", desc:"Clear Python tutorials, examples and online compiler" },
+              { name:"CS50 Python", url:"https://cs50.harvard.edu/python", emoji:"🏛️", color:"from-red-500 to-red-700", desc:"Harvard's free Python course — world class and free" },
+              { name:"Kaggle", url:"https://www.kaggle.com/learn/python", emoji:"📊", color:"from-teal-500 to-green-600", desc:"Learn Python with data science and real datasets" },
+              { name:"Automate Boring Stuff", url:"https://automatetheboringstuff.com", emoji:"⚙️", color:"from-gray-600 to-gray-800", desc:"Free book — use Python to automate real tasks" },
+              { name:"CheckiO", url:"https://checkio.org", emoji:"🗺️", color:"from-orange-500 to-yellow-500", desc:"Learn Python by solving game-based coding challenges" },
+              { name:"Python Tutor", url:"https://pythontutor.com", emoji:"🔍", color:"from-pink-500 to-rose-600", desc:"Visualize your code step by step — perfect for debugging" },
+              { name:"Replit", url:"https://replit.com", emoji:"⚡", color:"from-violet-500 to-purple-600", desc:"Code Python online and share your projects instantly" },
+            ].map((site, i) => (
+              <a key={i} href={site.url} target="_blank" rel="noopener noreferrer"
+                className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl
+                  transition-all duration-300 hover:-translate-y-2 overflow-hidden block">
+                {/* Top gradient bar */}
+                <div className={`h-1.5 bg-gradient-to-r ${site.color}`} />
+                <div className="p-5">
+                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${site.color}
+                    flex items-center justify-center text-2xl mb-4 shadow-md
+                    group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300`}>
+                    {site.emoji}
+                  </div>
+                  <h3 className="font-bold text-gray-900 mb-1.5">{site.name}</h3>
+                  <p className="text-gray-500 text-xs leading-relaxed mb-3">{site.desc}</p>
+                  <div className={`text-xs font-semibold flex items-center gap-1.5 bg-gradient-to-r ${site.color} bg-clip-text text-transparent`}>
+                    Visit site <FaArrowRight size={10} className="group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+          <p className="text-center text-xs text-gray-400 mt-8">
+            These are external sites — clicking will open them in a new tab
+          </p>
+        </div>
+      </section>
 
       {/* ── FINAL CTA ─────────────────────────────────────────────── */}
       <section className="py-24 bg-gradient-to-br from-primary-700 via-primary-600 to-indigo-700 relative overflow-hidden">

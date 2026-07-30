@@ -296,10 +296,22 @@ const FileManagerPage = () => {
 
   const fileInputRef = useRef(null);
 
-  // ── Load files ─────────────────────────────────────────────────
+  // Load the current personal folder when its path changes.
   useEffect(() => {
-    if (user) { fetchFiles(); fetchSharedFiles(); subscribeToShares(); }
-  }, [user, currentPath, sharedContext?.path]);
+    if (user) fetchFiles();
+  }, [user, currentPath]);
+
+  // Load shared items independently of personal-folder navigation.
+  useEffect(() => {
+    if (user) fetchSharedFiles();
+  }, [user, sharedContext?.path]);
+
+  // A Realtime channel must be subscribed only once. Re-subscribing every time
+  // a folder opens throws "cannot add postgres_changes callbacks after subscribe".
+  useEffect(() => {
+    if (!user) return undefined;
+    return subscribeToShares();
+  }, [user]);
 
   const fetchFiles = async () => {
     setLoading(true);

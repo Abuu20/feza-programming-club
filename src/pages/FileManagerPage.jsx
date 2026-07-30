@@ -456,6 +456,9 @@ const FileManagerPage = () => {
 
   // ── Navigate into folder ────────────────────────────────────────
   const openFolder = (folder) => {
+    // Ignore a second click on a card from the previous folder while the
+    // next folder's query is still loading.
+    if (normalizeFolderPath(folder.folder_path) !== normalizeFolderPath(currentPath)) return;
     const newPath = childFolderPath(currentPath, folder.name);
     setCurrentPath(newPath);
     setSelectedFiles(new Set());
@@ -893,8 +896,7 @@ const FileGridCard = ({ file, selected, onSelect, onOpen, onDelete, onShare, onR
     <div
       className={`group relative rounded-2xl border-2 p-3 cursor-pointer transition-all duration-150 bg-white
         ${selected ? 'border-primary-400 bg-primary-50' : 'border-gray-100 hover:border-gray-300 hover:shadow-md'}`}
-      onClick={onOpen}
-      onDoubleClick={onOpen}>
+      onClick={onOpen}>
       {/* Checkbox */}
       <div className={`absolute top-2 left-2 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all
         ${selected ? 'bg-primary-500 border-primary-500 opacity-100' : 'border-gray-300 opacity-0 group-hover:opacity-100 bg-white'}`}

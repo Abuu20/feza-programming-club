@@ -63,6 +63,16 @@ const formatDate = (ts) => {
   return d.toLocaleDateString();
 };
 
+// Folder paths are database keys, so keep one canonical representation everywhere.
+const normalizeFolderPath = (path = '/') => {
+  const clean = String(path).trim().replace(/\/+/g, '/');
+  if (!clean || clean === '/') return '/';
+  return `/${clean.replace(/^\/+|\/+$/g, '')}/`;
+};
+
+const childFolderPath = (parentPath, name) =>
+  normalizeFolderPath(`${normalizeFolderPath(parentPath)}${name}`);
+
 // ── Confirm Modal ─────────────────────────────────────────────────────────────
 const ConfirmModal = ({ title, message, confirmLabel='Delete', confirmColor='bg-red-600 hover:bg-red-700', onConfirm, onCancel }) => (
   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -80,6 +90,7 @@ const ConfirmModal = ({ title, message, confirmLabel='Delete', confirmColor='bg-
 // ── File Preview Modal ────────────────────────────────────────────────────────
 const PreviewModal = ({ file, onClose }) => {
   const type = getFileType(file.name);
+  const fileUrl = file.access_url || file.public_url;
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex flex-col" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="flex items-center justify-between px-6 py-4 bg-gray-900 flex-shrink-0">
@@ -89,7 +100,7 @@ const PreviewModal = ({ file, onClose }) => {
           <span className="text-gray-400 text-sm">{formatSize(file.size_bytes)}</span>
         </div>
         <div className="flex items-center gap-3">
-          <a href={file.public_url} target="_blank" rel="noopener noreferrer" download={file.name}
+          <a href={fileUrl} target="_blank" rel="noopener noreferrer" download={file.name}
             className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white transition">
             <FaDownload size={13} /> Download
           </a>
@@ -98,17 +109,17 @@ const PreviewModal = ({ file, onClose }) => {
       </div>
       <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
         {type === 'image' && (
-          <img src={file.public_url} alt={file.name}
+          <img src={fileUrl} alt={file.name}
             className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
         )}
         {type === 'pdf' && (
-          <iframe src={file.public_url} title={file.name}
+          <iframe src={fileUrl} title={file.name}
             className="w-full h-full rounded-xl" style={{ minHeight: '80vh' }} />
         )}
-        {type === 'code' && file.public_url && (
+        {type === 'code' && fileUrl && (
           <div className="bg-gray-950 text-green-300 rounded-2xl p-6 max-w-3xl w-full max-h-full overflow-auto font-mono text-sm">
             <p className="text-gray-500 mb-3 text-xs">— {file.name} —</p>
-            <a href={file.public_url} target="_blank" rel="noopener noreferrer"
+            <a href={fileUrl} target="_blank" rel="noopener noreferrer"
               className="text-primary-400 underline">Open in new tab to view code</a>
           </div>
         )}
@@ -117,7 +128,7 @@ const PreviewModal = ({ file, onClose }) => {
             <FileIcon name={file.name} size={64} className="mx-auto mb-4 opacity-60" />
             <p className="text-lg font-semibold mb-1">{file.name}</p>
             <p className="text-gray-400 mb-6">{formatSize(file.size_bytes)}</p>
-            <a href={file.public_url} download={file.name}
+            <a href={fileUrl} download={file.name}
               className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-xl hover:bg-primary-700 transition font-semibold">
               <FaDownload /> Download File
             </a>
@@ -254,6 +265,7 @@ const FileManagerPage = () => {
 
   const [files, setFiles]           = useState([]);
   const [sharedFiles, setSharedFiles] = useState([]);
+  const [sharedContext, setSharedContext] = useState(null);
   const [currentPath, setCurrentPath] = useState('/');
   const [view, setView]             = useState('my'); // 'my' | 'shared' | 'recent'
   const [loading, setLoading]       = useState(true);
@@ -276,18 +288,11 @@ const FileManagerPage = () => {
   // ── Load files ─────────────────────────────────────────────────
   useEffect(() => {
     if (user) { fetchFiles(); fetchSharedFiles(); subscribeToShares(); }
-  }, [user, currentPath]);
-
-  // Normalize path: always /something/ or /
-  const norm = (p) => {
-    if (!p || p === '/') return '/';
-    let s = p.startsWith('/') ? p : '/' + p;
-    return s.endsWith('/') ? s : s + '/';
-  };
+  }, [user, currentPath, sharedContext?.path]);
 
   const fetchFiles = async () => {
     setLoading(true);
-    const queryPath = norm(currentPath);
+    const queryPath = normalizeFolderPath(currentPath);
     const { data, error } = await supabase
       .from('file_manager')
       .select('*')
@@ -300,7 +305,35 @@ const FileManagerPage = () => {
     setLoading(false);
   };
 
+  const withAccessUrl = async (file) => {
+    if (!file?.storage_path) return file;
+    try {
+      const { data: signed } = await supabase.storage
+        .from('file-manager').createSignedUrl(file.storage_path, 86400);
+      if (signed?.signedUrl) return { ...file, access_url: signed.signedUrl };
+    } catch {}
+    return { ...file, access_url: file.public_url };
+  };
+
   const fetchSharedFiles = async () => {
+    // Once a shared folder is opened, load its direct children rather than the
+    // flat list of shares.  The RLS policy in the migration permits descendants.
+    if (sharedContext) {
+      const { data, error } = await supabase
+        .from('file_manager')
+        .select('*')
+        .eq('owner_id', sharedContext.root.owner_id)
+        .eq('folder_path', sharedContext.path)
+        .order('is_folder', { ascending: false })
+        .order('name');
+      if (error) console.error('fetchSharedFolder error:', error.message, 'path:', sharedContext.path);
+      const enriched = await Promise.all((data || []).map(withAccessUrl));
+      setSharedFiles(enriched.map(file => ({
+        id: `folder-${file.id}`, file_manager: file, is_read: true, shared_at: file.updated_at, isFolderChild: true,
+      })));
+      return;
+    }
+
     const { data } = await supabase
       .from('file_shares')
       .select('*, file_manager(*)')
@@ -308,16 +341,9 @@ const FileManagerPage = () => {
       .order('shared_at', { ascending: false });
     if (!data) { setSharedFiles([]); setUnreadShares(0); return; }
     // Generate signed URLs so students can access files uploaded by admin
-    const enriched = await Promise.all(data.map(async (share) => {
-      const file = share.file_manager;
-      if (!file?.storage_path) return share;
-      try {
-        const { data: signed } = await supabase.storage
-          .from('file-manager').createSignedUrl(file.storage_path, 86400);
-        if (signed?.signedUrl) return { ...share, file_manager: { ...file, access_url: signed.signedUrl } };
-      } catch {}
-      return { ...share, file_manager: { ...file, access_url: file.public_url } };
-    }));
+    const enriched = await Promise.all(data.map(async (share) => ({
+      ...share, file_manager: await withAccessUrl(share.file_manager),
+    })));
     setSharedFiles(enriched);
     setUnreadShares(enriched.filter(s => !s.is_read).length);
   };
@@ -378,7 +404,7 @@ const FileManagerPage = () => {
         const { error: dbErr } = await supabase.from('file_manager').insert({
           owner_id: user.id,
           name: safeName,
-          folder_path: norm(currentPath),
+          folder_path: normalizeFolderPath(currentPath),
           file_type: getFileType(file.name),
           size_bytes: file.size,
           storage_path: storagePath,
@@ -390,7 +416,7 @@ const FileManagerPage = () => {
           // File already exists — update it
           await supabase.from('file_manager').update({
             size_bytes: file.size, storage_path: storagePath, public_url: publicUrl
-          }).eq('owner_id', user.id).eq('folder_path', currentPath).eq('name', safeName);
+          }).eq('owner_id', user.id).eq('folder_path', normalizeFolderPath(currentPath)).eq('name', safeName);
         } else if (dbErr) throw dbErr;
 
         done++;
@@ -411,10 +437,14 @@ const FileManagerPage = () => {
   // ── Create folder ───────────────────────────────────────────────
   const createFolder = async (name) => {
     setShowNewFolder(false);
+    if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) {
+      toast.error('Folder names cannot contain slashes');
+      return;
+    }
     const { error } = await supabase.from('file_manager').insert({
       owner_id: user.id,
       name,
-      folder_path: norm(currentPath),  // normalized parent path
+      folder_path: normalizeFolderPath(currentPath),
       file_type: 'folder',
       is_folder: true,
     });
@@ -426,16 +456,29 @@ const FileManagerPage = () => {
 
   // ── Navigate into folder ────────────────────────────────────────
   const openFolder = (folder) => {
-    const base = currentPath === '/' ? '' : currentPath.replace(/\/+$/, '');
-    const newPath = norm(base + '/' + folder.name);
+    const newPath = childFolderPath(currentPath, folder.name);
     setCurrentPath(newPath);
     setSelectedFiles(new Set());
     setSearch('');
   };
 
+  const openSharedFolder = (folder) => {
+    const root = sharedContext?.root || folder;
+    setSharedContext({ root, path: childFolderPath(folder.folder_path, folder.name) });
+    setSearch('');
+  };
+
+  const leaveSharedFolder = () => {
+    const pathParts = normalizeFolderPath(sharedContext.path).split('/').filter(Boolean);
+    const rootParts = childFolderPath(sharedContext.root.folder_path, sharedContext.root.name).split('/').filter(Boolean);
+    if (pathParts.length <= rootParts.length) setSharedContext(null);
+    else setSharedContext(context => ({ ...context, path: normalizeFolderPath(pathParts.slice(0, -1).join('/')) }));
+    setSearch('');
+  };
+
   // ── Breadcrumb navigation ───────────────────────────────────────
   const getBreadcrumbs = () => {
-    const parts = norm(currentPath).split('/').filter(Boolean);
+    const parts = normalizeFolderPath(currentPath).split('/').filter(Boolean);
     const crumbs = [{ label: 'My Files', path: '/' }];
     let built = '/';
     parts.forEach(p => { built += p + '/'; crumbs.push({ label: p, path: built }); });
@@ -648,9 +691,16 @@ const FileManagerPage = () => {
           )}
 
           {view !== 'my' && (
-            <h2 className="font-bold text-gray-900 flex-1">
-              {view === 'shared' ? '📨 Shared with me' : '🕐 Recent Files'}
-            </h2>
+            <div className="font-bold text-gray-900 flex-1 flex items-center gap-2 min-w-0">
+              {view === 'shared' && sharedContext && (
+                <button onClick={leaveSharedFolder} className="text-sm text-primary-600 hover:text-primary-700 whitespace-nowrap">← Back</button>
+              )}
+              <h2 className="truncate">
+                {view === 'shared'
+                  ? (sharedContext ? `📁 ${sharedContext.path.split('/').filter(Boolean).slice(-1)[0]}` : '📨 Shared with me')
+                  : '🕐 Recent Files'}
+              </h2>
+            </div>
           )}
 
           {/* Search */}
@@ -772,7 +822,7 @@ const FileManagerPage = () => {
                     <div key={share.id}
                       className={`bg-white rounded-2xl border p-4 flex items-center gap-4 hover:shadow-md transition cursor-pointer
                         ${!share.is_read ? 'border-primary-300 bg-primary-50/30' : 'border-gray-200'}`}
-                      onClick={() => setPreviewFile(file)}>
+                      onClick={() => file.is_folder ? openSharedFolder(file) : setPreviewFile(file)}>
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${FILE_ICONS[getFileType(file.name)]?.bg || 'bg-gray-50'}`}>
                         <FileIcon name={file.name} size={24} />
                       </div>
@@ -783,17 +833,17 @@ const FileManagerPage = () => {
                         </div>
                         {share.message && <p className="text-sm text-gray-600 mt-0.5 truncate">"{share.message}"</p>}
                         <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                          <span>Shared by Teacher</span>
+                          <span>{share.isFolderChild ? 'Inside shared folder' : 'Shared by Teacher'}</span>
                           <span>{formatDate(share.shared_at)}</span>
                           <span>{formatSize(file.size_bytes)}</span>
                         </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
-                        <a href={file.public_url} download={file.name}
+                        {!file.is_folder && <a href={file.access_url || file.public_url} download={file.name}
                           onClick={e => e.stopPropagation()}
                           className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition">
                           <FaDownload size={14} />
-                        </a>
+                        </a>}
                       </div>
                     </div>
                   );
@@ -886,7 +936,7 @@ const FileGridCard = ({ file, selected, onSelect, onOpen, onDelete, onShare, onR
             <FaDownload size={11} />
           </a>
         )}
-        {isAdmin && !file.is_folder && (
+        {isAdmin && (
           <button onClick={onShare} className="p-1.5 bg-white rounded-lg shadow text-gray-500 hover:text-green-600 transition">
             <FaShare size={11} />
           </button>
@@ -944,7 +994,7 @@ const FileListRow = ({ file, selected, onSelect, onOpen, onDelete, onShare, onRe
           <FaDownload size={13} />
         </a>
       )}
-      {isAdmin && !file.is_folder && (
+      {isAdmin && (
         <button onClick={onShare} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition">
           <FaShare size={13} />
         </button>

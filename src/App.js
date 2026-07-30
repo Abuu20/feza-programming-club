@@ -7,6 +7,7 @@ import PublicLayout from './components/layout/PublicLayout';
 import AdminLayout from './components/layout/AdminLayout';
 import PrivateRoute from './components/common/PrivateRoute';
 import StudentPrivateRoute from './components/common/StudentPrivateRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { testConnection } from './services/supabase';
 
 // Public Pages
@@ -92,7 +93,7 @@ function App() {
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
                 <Route path="/student/profile" element={<MemberProfile />} />
                 <Route path="/student/members-manage" element={<MembersManagePage />} />
-                <Route path="/student/files" element={<FileManagerPage />} />
+                <Route path="/student/files" element={<ErrorBoundary><FileManagerPage /></ErrorBoundary>} />
               </Route>
             </Route>
 

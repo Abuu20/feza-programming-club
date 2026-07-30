@@ -73,6 +73,17 @@ const normalizeFolderPath = (path = '/') => {
 const childFolderPath = (parentPath, name) =>
   normalizeFolderPath(`${normalizeFolderPath(parentPath)}${name}`);
 
+// Older rows can be incomplete. Keep one bad database row from taking down the
+// entire file-manager view in production.
+const normalizeFileRecord = (file) => {
+  if (!file) return null;
+  return {
+    ...file,
+    name: typeof file.name === 'string' && file.name.trim() ? file.name : 'Untitled item',
+    folder_path: normalizeFolderPath(file.folder_path),
+  };
+};
+
 // ── Confirm Modal ─────────────────────────────────────────────────────────────
 const ConfirmModal = ({ title, message, confirmLabel='Delete', confirmColor='bg-red-600 hover:bg-red-700', onConfirm, onCancel }) => (
   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -301,7 +312,7 @@ const FileManagerPage = () => {
       .order('is_folder', { ascending: false })
       .order('name');
     if (error) console.error('fetchFiles error:', error.message, 'path:', queryPath);
-    setFiles(data || []);
+    setFiles((data || []).map(normalizeFileRecord));
     setLoading(false);
   };
 
@@ -329,7 +340,7 @@ const FileManagerPage = () => {
       if (error) console.error('fetchSharedFolder error:', error.message, 'path:', sharedContext.path);
       const enriched = await Promise.all((data || []).map(withAccessUrl));
       setSharedFiles(enriched.map(file => ({
-        id: `folder-${file.id}`, file_manager: file, is_read: true, shared_at: file.updated_at, isFolderChild: true,
+        id: `folder-${file.id}`, file_manager: normalizeFileRecord(file), is_read: true, shared_at: file.updated_at, isFolderChild: true,
       })));
       return;
     }
@@ -342,7 +353,7 @@ const FileManagerPage = () => {
     if (!data) { setSharedFiles([]); setUnreadShares(0); return; }
     // Generate signed URLs so students can access files uploaded by admin
     const enriched = await Promise.all(data.map(async (share) => ({
-      ...share, file_manager: await withAccessUrl(share.file_manager),
+      ...share, file_manager: normalizeFileRecord(await withAccessUrl(share.file_manager)),
     })));
     setSharedFiles(enriched);
     setUnreadShares(enriched.filter(s => !s.is_read).length);

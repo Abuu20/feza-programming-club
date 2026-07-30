@@ -20,6 +20,9 @@ class ErrorBoundary extends React.Component {
             <p className="mt-2 text-sm text-gray-600">
               The folder data contains an item the app cannot display yet.
             </p>
+            <p className="mt-3 rounded-lg bg-red-50 p-3 font-mono text-xs text-red-700 break-words">
+              {this.state.error?.message || 'Unknown rendering error'}
+            </p>
             <button
               type="button"
               onClick={() => this.setState({ error: null })}

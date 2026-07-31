@@ -186,6 +186,12 @@ const AdminLayout = () => {
       icon: FaLightbulb, 
       label: 'Daily Tips' 
     },
+
+    { 
+      path: '/admin/useful-sites', 
+      icon: FaBookOpen, 
+      label: 'Useful Sites' 
+    },
   ];
 
   const isActive = (path, exact = false) => {

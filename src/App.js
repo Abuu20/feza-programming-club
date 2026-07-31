@@ -50,6 +50,8 @@ import AdminCurriculum from './pages/admin/AdminCurriculum';
 import ResetLinkGenerator from './pages/admin/ResetLinkGenerator';
 import AdminQuiz from './pages/admin/AdminQuiz';
 import AdminDailyTips from './pages/admin/AdminDailyTips';
+import AdminUsefulSites from './pages/admin/AdminUsefulSites';
+
 
 function App() {
   useEffect(() => {
@@ -113,6 +115,7 @@ function App() {
                 <Route path="/admin/reset-link-generator" element={<ResetLinkGenerator />} />
                 <Route path="/admin/quiz" element={<AdminQuiz />} />
                 <Route path="/admin/tips" element={<AdminDailyTips />} />
+                <Route path="/admin/useful-sites" element={<AdminUsefulSites />} />
               </Route>
             </Route>
           </Routes>

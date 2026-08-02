@@ -145,7 +145,7 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
       <div className="group flex flex-col items-end px-3 md:px-4 py-0.5">
         {/* Reply preview */}
         {msg.reply_to_id && msg.reply_preview && (
-          <div className="max-w-xs md:max-w-md border-l-2 border-primary-300 pl-2 mb-1 text-xs text-gray-500 truncate self-end">
+          <div className="max-w-xs md:max-w-md border-l-2 border-blue-500 pl-2 mb-1 text-xs text-gray-400 truncate self-end" style={{background:"rgba(59,130,246,0.05)",borderRadius:"0 4px 4px 0",padding:"2px 8px"}}>
             ↩ {msg.reply_preview}
           </div>
         )}
@@ -195,7 +195,7 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
                 </div>
               </div>
             ) : msg.content && (
-              <div className="bg-primary-600 text-white px-4 py-2 rounded-2xl rounded-br-sm text-sm break-words whitespace-pre-wrap shadow-sm">
+              <div className="text-white px-4 py-2.5 rounded-2xl rounded-br-sm text-sm break-words whitespace-pre-wrap shadow-lg" style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)"}}>
                 {msg.content}{msg.is_edited && <span className="text-primary-200 text-xs ml-1">(edited)</span>}
               </div>
             )}
@@ -241,7 +241,8 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
             {Object.entries(reactionMap).map(([emoji, users]) => (
               <button key={emoji} onClick={() => onReact(msg.id, emoji)}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition
-                  ${users.includes(currentUserId) ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                  ${users.includes(currentUserId) ? 'border-blue-500 text-blue-400' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                style={{background: users.includes(currentUserId) ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.04)'}}>
                 {emoji} {users.length}
               </button>
             ))}
@@ -265,7 +266,7 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
         {isDM && <div className="flex justify-start mb-0.5 ml-1"><span className="text-xs text-gray-400">{timeStr}</span></div>}
 
         {msg.reply_to_id && msg.reply_preview && (
-          <div className="border-l-2 border-gray-300 pl-2 mb-1 text-xs text-gray-500 truncate ml-1">
+          <div className="border-l-2 border-gray-600 pl-2 mb-1 text-xs text-gray-400 truncate ml-1" style={{background:"rgba(255,255,255,0.03)",borderRadius:"0 4px 4px 0",padding:"2px 8px"}}>
             ↩ {msg.reply_preview}
           </div>
         )}
@@ -273,7 +274,7 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
         <div className="flex items-end gap-2">
           <div className="flex flex-col">
             {msg.content && (
-              <div className="bg-white text-gray-800 px-4 py-2 rounded-2xl rounded-bl-sm text-sm break-words whitespace-pre-wrap shadow-sm border border-gray-100">
+              <div className="px-4 py-2.5 rounded-2xl rounded-bl-sm text-sm break-words whitespace-pre-wrap shadow-sm" style={{background:"#1e2130",color:"#e2e8f0",border:"1px solid rgba(255,255,255,0.07)"}}>
                 {msg.content}{msg.is_edited && <span className="text-gray-400 text-xs ml-1">(edited)</span>}
               </div>
             )}
@@ -339,7 +340,8 @@ const MessageBubble = ({ msg, currentUserId, onReact, onReply, onDelete, onEdit,
             {Object.entries(reactionMap).map(([emoji, users]) => (
               <button key={emoji} onClick={() => onReact(msg.id, emoji)}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition
-                  ${users.includes(currentUserId) ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                  ${users.includes(currentUserId) ? 'border-blue-500 text-blue-400' : 'border-white/10 text-gray-400 hover:border-white/20'}`}
+                style={{background: users.includes(currentUserId) ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.04)'}}>
                 {emoji} {users.length}
               </button>
             ))}
@@ -835,7 +837,7 @@ const ChatPage = () => {
   }).filter(Boolean);
 
   return (
-    <div className="relative flex h-[calc(100vh-64px)] bg-gray-100 overflow-hidden">
+    <div className="relative flex h-[calc(100vh-64px)] overflow-hidden" style={{background:"#0a0a0f"}}>
 
       {/* ── Mobile sidebar overlay backdrop ──────────────── */}
       {showSidebar && (
@@ -846,13 +848,13 @@ const ChatPage = () => {
       {/* ── Sidebar ───────────────────────────────────────── */}
       <div className={`
         fixed md:relative inset-y-0 left-0 z-40
-        w-64 flex-shrink-0 bg-gray-900 text-gray-300 flex flex-col
+        w-64 flex-shrink-0 text-gray-300 flex flex-col
         transform transition-transform duration-200
         ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        <div className="p-4 border-b border-gray-700">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <FaCommentDots className="text-green-400" /> Club Chat
+      `} style={{background:"#111118",borderRight:"1px solid rgba(255,255,255,0.06)"}}>
+        <div className="p-4" style={{borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+          <h2 className="font-bold text-white text-base flex items-center gap-2">
+            <FaCommentDots style={{color:"#22c55e"}} /> Club Chat
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">Feza Programming Club</p>
         </div>
@@ -874,8 +876,9 @@ const ChatPage = () => {
                 onClick={() => { setActiveChannel(ch); setActiveDM(null); setShowSidebar(false); setUnreadCounts(prev => { const n = {...prev}; delete n[ch.id]; return n; }); dispatchUnread(unreadCounts, ch.id); }}
                 className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 text-sm transition
                   ${activeChannel?.id === ch.id && !activeDM
-                    ? 'bg-gray-600 text-white'
-                    : 'hover:bg-gray-700 text-gray-400 hover:text-white'}`}>
+                    ? 'text-white'
+                    : 'text-gray-500 hover:text-gray-200'
+                  } ${activeChannel?.id === ch.id && !activeDM ? 'bg-white/10' : 'hover:bg-white/5'}`}>
                 <FaHashtag size={12} className="flex-shrink-0" />
                 <span className="truncate flex-1">{ch.name}</span>
                 {unreadCounts[ch.id] > 0 && (
@@ -928,7 +931,7 @@ const ChatPage = () => {
 
         {/* Current user */}
         {user && (
-          <div className="p-3 border-t border-gray-700 flex items-center gap-2">
+          <div className="p-3 flex items-center gap-2" style={{borderTop:"1px solid rgba(255,255,255,0.06)"}}>
             <div className="relative">
               <Avatar name={displayName} url={avatarUrl} size={8} />
               <FaCircle className="absolute bottom-0 right-0 text-green-400 text-xs" />
@@ -1032,13 +1035,13 @@ const ChatPage = () => {
 
         {/* Typing indicator */}
         {typingUsers.length > 0 && (
-          <div className="px-4 py-1 flex items-center gap-2">
+          <div className="px-4 py-1 flex items-center gap-2" style={{borderTop:"1px solid rgba(255,255,255,0.04)"}}>
             <div className="flex gap-1 items-center">
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}/>
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}/>
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}/>
             </div>
-            <span className="text-xs text-gray-500 italic">
+            <span className="text-xs italic" style={{color:"#4b5563"}}>
               {typingUsers.length === 1
                 ? `${typingUsers[0]} is typing...`
                 : `${typingUsers.slice(0,-1).join(', ')} and ${typingUsers.at(-1)} are typing...`}
@@ -1177,7 +1180,7 @@ const ChatPage = () => {
             </div>
           )}
 
-          <div className={`flex gap-2 items-end border rounded-xl p-2 transition-all
+          <div className={`flex gap-2 items-end rounded-xl p-2 transition-all border
             ${codeMode ? 'bg-gray-900 border-gray-600 opacity-0 h-0 overflow-hidden p-0' : 'bg-gray-50 border-gray-200'}`}>
 
             {/* Image upload */}

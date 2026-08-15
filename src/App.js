@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider } from './context/AuthContext';
 import PublicLayout from './components/layout/PublicLayout';
 import AdminLayout from './components/layout/AdminLayout';
@@ -63,6 +64,7 @@ function App() {
       <Router>
         <AuthProvider>
           <Toaster position="top-right" />
+          <Analytics />
           <WelcomeModal />
           <Routes>
             {/* Public Routes */}

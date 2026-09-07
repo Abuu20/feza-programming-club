@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /student/dashboard
+Disallow: /student/files
+Disallow: /student/profile
+Disallow: /student/members-manage
+
+Sitemap: https://fezaprogramming.com/sitemap.xml

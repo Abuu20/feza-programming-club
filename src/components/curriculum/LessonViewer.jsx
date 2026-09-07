@@ -1,0 +1,699 @@
+// src/components/curriculum/LessonViewer.jsx
+import React, { useState } from 'react';
+import { FaCheck, FaClock, FaProjectDiagram, FaImage, FaCode, FaLightbulb, FaGraduationCap, FaDownload, FaFilePdf, FaFileImage, FaFileAlt, FaHeart, FaStar, FaRegSmile, FaSpinner, FaKeyboard, FaChevronDown, FaChevronUp, FaInfoCircle, FaVideo } from 'react-icons/fa';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { usePythonRunner } from '../../hooks/usePythonRunner';
+
+const LessonViewer = ({ 
+  lesson, 
+  module, 
+  attachments = [], 
+  miniProjects = [], 
+  isCompleted = false, 
+  onComplete, 
+  onBack 
+}) => {
+  const [expandedProjects, setExpandedProjects] = useState({});
+  const [userCodes, setUserCodes] = useState({});
+  const [codeOutputs, setCodeOutputs] = useState({});
+  const [showSolutions, setShowSolutions] = useState({});
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [inputValues, setInputValues] = useState({});
+  const [showInputDialog, setShowInputDialog] = useState(false);
+  const [pendingCode, setPendingCode] = useState(null);
+  const [pendingProjectId, setPendingProjectId] = useState(null);
+  
+  const { runPython, isLoading: isRunning } = usePythonRunner();
+
+  // Initialize user code for each project
+  React.useEffect(() => {
+    const initialCodes = {};
+    const initialOutputs = {};
+    const initialSolutions = {};
+    miniProjects.forEach(project => {
+      initialCodes[project.id] = project.starter_code || '# Write your code here\n\n';
+      initialOutputs[project.id] = '';
+      initialSolutions[project.id] = false;
+    });
+    setUserCodes(initialCodes);
+    setCodeOutputs(initialOutputs);
+    setShowSolutions(initialSolutions);
+  }, [miniProjects]);
+
+  // Helper function to safely get array values
+  const getArrayFromField = (field) => {
+    if (!field) return [];
+    if (Array.isArray(field)) return field;
+    if (typeof field === 'string') {
+      if (field.startsWith('[') && field.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(field);
+          return Array.isArray(parsed) ? parsed : [field];
+        } catch (e) {
+          return field.split('\n').filter(line => line.trim());
+        }
+      }
+      return field.split('\n').filter(line => line.trim());
+    }
+    return [];
+  };
+
+  const looksLikeUploadFileName = (value) => {
+    if (!value || typeof value !== 'string') return false;
+    const cleaned = value.trim();
+    if (!cleaned) return false;
+
+    const lower = cleaned.toLowerCase();
+    const hasExtension = /\.(png|jpg|jpeg|gif|webp|svg|pdf|mp4|mov|avi|zip|txt|doc|docx)$/i.test(lower);
+    const isHashLike = /^[a-f0-9-]{6,}$/i.test(cleaned.replace(/\.(png|jpg|jpeg|gif|webp|svg|pdf|mp4|mov|avi|zip|txt|doc|docx)$/i, ''));
+    const isStorageLike = /^(image|photo|file|document|attachment|upload)(\s*[0-9]*)?$/i.test(cleaned);
+    const isUrlLike = /^https?:\/\//i.test(cleaned);
+
+    return hasExtension || isHashLike || isStorageLike || isUrlLike;
+  };
+
+  // Helper function to get a friendly display name for attachments
+  const getDisplayTitle = (attachment) => {
+    const title = attachment?.title?.trim();
+    const description = attachment?.description?.trim();
+
+    if (title && title !== attachment.url && !looksLikeUploadFileName(title)) {
+      return title;
+    }
+
+    if (description && !looksLikeUploadFileName(description)) {
+      return description;
+    }
+
+    return null;
+  };
+
+  const getDisplayDescription = (attachment) => {
+    const description = attachment?.description?.trim();
+    if (!description) return null;
+    if (looksLikeUploadFileName(description)) return null;
+    return description;
+  };
+
+  const renderFormattedText = (text) => {
+    if (!text) return null;
+
+    const sections = String(text)
+      .split(/\n{2,}/)
+      .map(section => section.trim())
+      .filter(Boolean);
+
+    if (sections.length === 0) return null;
+
+    return (
+      <div className="space-y-4 text-gray-700 text-lg leading-8">
+        {sections.map((section, index) => {
+          const lines = section.split(/\n/).map(line => line.trim()).filter(Boolean);
+
+          if (lines.length === 0) return null;
+
+          if (lines.length === 1) {
+            return <p key={index} className="whitespace-pre-wrap break-words">{lines[0]}</p>;
+          }
+
+          return (
+            <div key={index} className="space-y-2">
+              {lines.map((line, lineIndex) => (
+                <p key={`${index}-${lineIndex}`} className="whitespace-pre-wrap break-words">{line}</p>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const runCode = async (projectId, code) => {
+    if (!code.trim()) {
+      setCodeOutputs(prev => ({ ...prev, [projectId]: '⚠️ Please write some code first!' }));
+      return;
+    }
+
+    const hasInput = code.includes('input(');
+    
+    if (hasInput) {
+      setPendingCode(code);
+      setPendingProjectId(projectId);
+      setShowInputDialog(true);
+    } else {
+      setCodeOutputs(prev => ({ ...prev, [projectId]: '🔄 Running code...' }));
+      const result = await runPython(code, []);
+      
+      if (result.error) {
+        setCodeOutputs(prev => ({ ...prev, [projectId]: `❌ Error:\n${result.error}` }));
+      } else {
+        setCodeOutputs(prev => ({ ...prev, [projectId]: `✅ Output:\n${result.output || 'No output'}` }));
+      }
+    }
+  };
+
+  const handleRunWithInputs = async () => {
+    setShowInputDialog(false);
+    const inputVals = inputValues[pendingProjectId] || [];
+    
+    setCodeOutputs(prev => ({ ...prev, [pendingProjectId]: '🔄 Running code with provided inputs...' }));
+    
+    const result = await runPython(pendingCode, inputVals);
+    
+    if (result.error) {
+      setCodeOutputs(prev => ({ ...prev, [pendingProjectId]: `❌ Error:\n${result.error}` }));
+    } else {
+      setCodeOutputs(prev => ({ ...prev, [pendingProjectId]: `✅ Output:\n${result.output || 'No output'}` }));
+    }
+    
+    setInputValues(prev => ({ ...prev, [pendingProjectId]: [] }));
+    setPendingCode(null);
+    setPendingProjectId(null);
+  };
+
+  const toggleProject = (projectId) => {
+    setExpandedProjects(prev => ({
+      ...prev,
+      [projectId]: !prev[projectId]
+    }));
+  };
+
+  const getFileType = (url) => {
+    if (!url) return 'other';
+    const extension = url.split('.').pop()?.toLowerCase() || '';
+    const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'avif'];
+    const pdfTypes = ['pdf'];
+    const videoTypes = ['mp4', 'webm', 'mov', 'avi'];
+    
+    if (imageTypes.includes(extension)) return 'image';
+    if (pdfTypes.includes(extension)) return 'pdf';
+    if (videoTypes.includes(extension)) return 'video';
+    return 'other';
+  };
+
+  const getFileIcon = (fileType, isMotivational = false) => {
+    if (isMotivational) return <FaHeart className="text-pink-500 text-2xl" />;
+    switch(fileType) {
+      case 'pdf': return <FaFilePdf className="text-red-500 text-2xl" />;
+      case 'image': return <FaFileImage className="text-purple-500 text-2xl" />;
+      case 'video': return <FaVideo className="text-blue-500 text-2xl" />;
+      default: return <FaFileAlt className="text-gray-500 text-2xl" />;
+    }
+  };
+
+  const renderAttachment = (attachment) => {
+    if (!attachment || !attachment.url) return null;
+    
+    const fileType = getFileType(attachment.url);
+    const displayTitle = getDisplayTitle(attachment);
+    const displayDescription = getDisplayDescription(attachment);
+    const isMotivational = attachment.is_motivational;
+    
+    if (fileType === 'image') {
+      return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-all duration-300">
+          <div className="relative group">
+            <img 
+              src={attachment.url} 
+              alt={displayTitle}
+              className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition"
+              onClick={() => setSelectedImage(attachment.url)}
+              loading="lazy"
+            />
+            <button
+              onClick={() => window.open(attachment.url, '_blank')}
+              className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition"
+              aria-label="View full size"
+            >
+              🔍
+            </button>
+          </div>
+          <div className="p-3 bg-gray-50 text-sm border-t">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {getFileIcon(fileType)}
+                {displayTitle ? (
+                  <span className="font-medium text-gray-800 truncate">{displayTitle}</span>
+                ) : null}
+              </div>
+              <a 
+                href={attachment.url} 
+                download 
+                className="text-gray-500 hover:text-primary-600 transition flex-shrink-0"
+                title="Download"
+              >
+                <FaDownload />
+              </a>
+            </div>
+            {displayDescription && displayDescription !== displayTitle && (
+              <p className="text-gray-600 mt-1 text-xs">{displayDescription}</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+    
+    if (fileType === 'pdf') {
+      return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-all duration-300">
+          <div className="bg-gradient-to-r from-red-50 to-orange-50 p-5">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="text-5xl">📚</div>
+                <div>
+                  <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                    {getFileIcon(fileType)}
+                    {displayTitle || 'Lesson Material'}
+                  </h4>
+                  {displayDescription && displayDescription !== displayTitle && (
+                    <p className="text-sm text-gray-600 mt-1">{displayDescription}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700 transition flex items-center gap-2 shadow-md">
+                  📖 Read Online
+                </a>
+                <a href={attachment.url} download className="bg-gray-700 text-white px-5 py-2.5 rounded-lg hover:bg-gray-800 transition flex items-center gap-2 shadow-md">
+                  <FaDownload /> Download
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    if (fileType === 'video') {
+      return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition">
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                {getFileIcon(fileType)}
+                {displayTitle || 'Lesson Material'}
+              </h4>
+              <a href={attachment.url} download className="text-gray-500 hover:text-primary-600">
+                <FaDownload />
+              </a>
+            </div>
+            {displayDescription && displayDescription !== displayTitle && (
+              <p className="text-sm text-gray-600 mb-3">{displayDescription}</p>
+            )}
+            <video controls className="w-full rounded-lg shadow-md" poster={attachment.thumbnail_url}>
+              <source src={attachment.url} />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
+  const renderMotivationalContent = () => {
+    const motivationalMaterials = attachments?.filter(att => att.is_motivational) || [];
+    if (motivationalMaterials.length === 0) return null;
+
+    const randomMotivation = motivationalMaterials[Math.floor(Math.random() * motivationalMaterials.length)];
+    const displayTitle = getDisplayTitle(randomMotivation);
+    
+    return (
+      <div className="bg-gradient-to-r from-pink-50 to-purple-50 border-2 border-pink-200 rounded-xl p-6 mb-8 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="text-4xl animate-bounce">
+            {randomMotivation.icon || <FaHeart className="text-pink-500" />}
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-lg text-pink-800 flex items-center gap-2">
+              <FaStar className="text-yellow-500" />
+              {displayTitle}
+              <FaRegSmile className="text-yellow-500" />
+            </h3>
+            <p className="text-gray-700 mt-2 italic">
+              {randomMotivation.description || "Keep going! Every line of code brings you closer to mastery! 💪"}
+            </p>
+            {randomMotivation.url && getFileType(randomMotivation.url) === 'image' && (
+              <img 
+                src={randomMotivation.url} 
+                alt={displayTitle}
+                className="mt-3 rounded-lg max-h-32 object-cover cursor-pointer hover:opacity-90"
+                onClick={() => setSelectedImage(randomMotivation.url)}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ImageLightbox = () => {
+    if (!selectedImage) return null;
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}>
+        <div className="relative max-w-5xl max-h-screen">
+          <img src={selectedImage} alt="Full size view" className="max-w-full max-h-screen object-contain rounded-lg" />
+          <button onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition">✕</button>
+        </div>
+      </div>
+    );
+  };
+
+  const learningMaterials = attachments?.filter(att => !att.is_motivational) || [];
+  const codeExamples = lesson?.code_examples || [];
+  
+  const learningOutcomes = getArrayFromField(lesson?.learning_outcomes);
+  const keyTakeaways = getArrayFromField(lesson?.key_takeaways);
+  const commonMistakes = getArrayFromField(lesson?.common_mistakes);
+  const prerequisites = getArrayFromField(lesson?.prerequisites);
+
+  return (
+    <>
+      <ImageLightbox />
+      
+      {/* Input Dialog */}
+      {showInputDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <FaKeyboard className="text-primary-600" />
+                Input Required
+              </h3>
+              <p className="text-gray-600 mb-4">This code uses <code className="bg-gray-100 px-2 py-1 rounded">input()</code>. Please provide the required inputs:</p>
+              
+              <div className="space-y-3 mb-6">
+                <label className="block text-sm font-medium text-gray-700">Input values (one per line):</label>
+                <textarea
+                  rows="3"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Example:&#10;10&#10;Hello World&#10;42"
+                  value={(inputValues[pendingProjectId] || []).join('\n')}
+                  onChange={(e) => setInputValues(prev => ({ ...prev, [pendingProjectId]: e.target.value.split('\n').filter(v => v.trim()) }))}
+                />
+                <p className="text-xs text-gray-500">Each line will be used as an input in order</p>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowInputDialog(false);
+                    setInputValues(prev => ({ ...prev, [pendingProjectId]: [] }));
+                    setPendingCode(null);
+                    setPendingProjectId(null);
+                  }}
+                  className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRunWithInputs}
+                  className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
+                >
+                  Run Code
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <div className="bg-white border-b sticky top-0 z-20 shadow-sm">
+          <div className="container mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-2">
+            <button onClick={onBack} className="text-primary-600 hover:text-primary-700 flex items-center gap-1 font-medium">
+              ← Back to Curriculum
+            </button>
+            <div className="text-sm text-gray-500">{module?.title} • {lesson?.title}</div>
+            {isCompleted && <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs flex items-center gap-1"><FaCheck /> Completed</span>}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="container mx-auto px-4 py-8 max-w-5xl">
+          {/* Title Section */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2">{lesson?.title}</h1>
+            <div className="flex flex-wrap gap-3 text-sm text-gray-500 mb-4">
+              <span className="flex items-center gap-1"><FaClock /> {lesson?.estimated_time || 10} minutes</span>
+              <span className="capitalize">📊 {lesson?.difficulty || 'Beginner'}</span>
+              {miniProjects.length > 0 && (
+                <span className="flex items-center gap-1 text-green-600">
+                  <FaProjectDiagram /> {miniProjects.length} Mini-Project{miniProjects.length > 1 ? 's' : ''}
+                </span>
+              )}
+              {learningMaterials.length > 0 && <span className="flex items-center gap-1 text-purple-600"><FaImage /> {learningMaterials.length} learning materials</span>}
+            </div>
+            {renderFormattedText(lesson?.description)}
+          </div>
+
+          {/* Prerequisites */}
+          {prerequisites.length > 0 && (
+            <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg mb-6">
+              <h3 className="font-semibold flex items-center gap-2 mb-2">📋 Prerequisites</h3>
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
+                {prerequisites.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {/* Learning Outcomes */}
+          {learningOutcomes.length > 0 && (
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg mb-6">
+              <h3 className="font-semibold flex items-center gap-2 mb-2">
+                <FaGraduationCap className="text-blue-600" />
+                What You'll Learn
+              </h3>
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
+                {learningOutcomes.map((outcome, i) => <li key={i}>{outcome}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {/* Motivational Content */}
+          {renderMotivationalContent()}
+
+          {/* Learning Materials */}
+          {learningMaterials.length > 0 && (
+            <div className="mb-8">
+              <h3 className="font-semibold flex items-center gap-2 mb-4 text-xl">
+                <FaImage className="text-purple-600" />
+                Learning Materials ({learningMaterials.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {learningMaterials.map(att => <div key={att.id}>{renderAttachment(att)}</div>)}
+              </div>
+            </div>
+          )}
+
+          {/* Code Examples */}
+          {codeExamples.length > 0 && (
+            <div className="mb-8">
+              <h3 className="font-semibold flex items-center gap-2 mb-3 text-xl">
+                <FaCode className="text-green-600" />
+                Code Examples
+              </h3>
+              {codeExamples.map((example, idx) => (
+                <div key={idx} className="bg-gray-900 rounded-lg overflow-hidden mb-4">
+                  <div className="bg-gray-800 px-4 py-2 text-white text-sm">
+                    {example.description || `Example ${idx + 1}`}
+                  </div>
+                  <SyntaxHighlighter language="python" style={tomorrow} className="m-0">
+                    {example.code || ''}
+                  </SyntaxHighlighter>
+                  {example.output && (
+                    <div className="bg-gray-800 px-4 py-2 border-t border-gray-700">
+                      <div className="text-gray-400 text-xs mb-1">Output:</div>
+                      <pre className="text-green-400 text-sm font-mono">{example.output}</pre>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Multiple Mini Projects */}
+          {miniProjects.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-2xl font-bold flex items-center gap-2 mb-4 text-green-800">
+                <FaProjectDiagram className="text-green-600" />
+                Mini-Projects ({miniProjects.length})
+              </h3>
+              <p className="text-gray-600 mb-4">Complete these projects to practice what you've learned!</p>
+              
+              <div className="space-y-4">
+                {miniProjects.map((project, idx) => {
+                  const isExpanded = expandedProjects[project.id] !== false;
+                  
+                  return (
+                    <div key={project.id} className="border-2 border-green-200 rounded-xl overflow-hidden bg-gradient-to-r from-green-50 to-emerald-50">
+                      {/* Project Header */}
+                      <button
+                        onClick={() => toggleProject(project.id)}
+                        className="w-full p-5 text-left flex justify-between items-center hover:bg-green-100 transition"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-2xl font-bold text-green-700">#{idx + 1}</span>
+                            <h4 className="text-xl font-bold text-green-800">{project.title}</h4>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              project.difficulty === 'beginner' ? 'bg-green-200 text-green-700' :
+                              project.difficulty === 'intermediate' ? 'bg-yellow-200 text-yellow-700' :
+                              'bg-red-200 text-red-700'
+                            }`}>
+                              {project.difficulty}
+                            </span>
+                            <span className="text-xs text-gray-600 flex items-center gap-1">
+                              <FaClock /> {project.estimated_time} min
+                            </span>
+                          </div>
+                          <p className="text-gray-600 mt-1">{project.description}</p>
+                        </div>
+                        {isExpanded ? <FaChevronUp className="text-green-600" /> : <FaChevronDown className="text-green-600" />}
+                      </button>
+
+                      {/* Project Content */}
+                      {isExpanded && (
+                        <div className="p-5 pt-0 border-t border-green-200">
+                          {/* Learning Goals */}
+                          {project.learning_goals && project.learning_goals.length > 0 && (
+                            <div className="bg-yellow-50 p-4 rounded-lg mb-4 border border-yellow-200">
+                              <h4 className="font-semibold flex items-center gap-2 mb-2">
+                                <FaLightbulb className="text-yellow-600" />
+                                Project Goals
+                              </h4>
+                              <ul className="list-disc list-inside text-sm space-y-1">
+                                {project.learning_goals.map((goal, i) => (
+                                  <li key={i} className="text-gray-700">{goal}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Code Editor */}
+                          <div className="mb-4">
+                            <label className="block font-semibold mb-2 text-gray-700">Your Code:</label>
+                            <textarea
+                              value={userCodes[project.id] || ''}
+                              onChange={(e) => setUserCodes(prev => ({ ...prev, [project.id]: e.target.value }))}
+                              rows="10"
+                              className="w-full font-mono text-sm p-4 border rounded-lg bg-gray-900 text-gray-100 focus:ring-2 focus:ring-green-500 outline-none"
+                            />
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap gap-3 mb-4">
+                            <button 
+                              onClick={() => runCode(project.id, userCodes[project.id])} 
+                              disabled={isRunning}
+                              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {isRunning ? <><FaSpinner className="animate-spin" /> Running...</> : '▶ Run Code'}
+                            </button>
+                            {project.solution_code && (
+                              <button 
+                                onClick={() => setShowSolutions(prev => ({ ...prev, [project.id]: !prev[project.id] }))} 
+                                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                              >
+                                {showSolutions[project.id] ? 'Hide Solution' : '💡 View Solution'}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Output */}
+                          {codeOutputs[project.id] && (
+                            <div className="bg-gray-900 rounded-lg p-4 mb-4">
+                              <div className="text-gray-400 text-xs mb-1">Output:</div>
+                              <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">{codeOutputs[project.id]}</pre>
+                            </div>
+                          )}
+
+                          {/* Solution */}
+                          {showSolutions[project.id] && project.solution_code && (
+                            <div className="mt-4">
+                              <h4 className="font-semibold mb-2 text-gray-700">Solution:</h4>
+                              <SyntaxHighlighter language="python" style={tomorrow}>
+                                {project.solution_code}
+                              </SyntaxHighlighter>
+                            </div>
+                          )}
+
+                          {/* Expected Output */}
+                          {project.expected_output && (
+                            <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
+                              <h4 className="font-semibold mb-2 text-blue-800">Expected Output:</h4>
+                              <pre className="text-sm font-mono bg-blue-100 p-2 rounded text-blue-900">
+                                {project.expected_output}
+                              </pre>
+                            </div>
+                          )}
+
+                          {/* Hints */}
+                          {project.hints && project.hints.length > 0 && (
+                            <div className="bg-yellow-50 p-4 rounded-lg mt-4 border border-yellow-200">
+                              <h4 className="font-semibold mb-2 text-yellow-800 flex items-center gap-2">
+                                <FaLightbulb className="text-yellow-600" />
+                                Hints
+                              </h4>
+                              <ul className="list-disc list-inside text-sm space-y-1">
+                                {project.hints.map((hint, i) => (
+                                  <li key={i} className="text-gray-700">{hint}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Key Takeaways */}
+          {keyTakeaways.length > 0 && (
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg mb-6">
+              <h3 className="font-semibold flex items-center gap-2 mb-2">
+                <FaCheck className="text-green-600" />
+                Key Takeaways
+              </h3>
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
+                {keyTakeaways.map((takeaway, i) => <li key={i}>{takeaway}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {/* Common Mistakes */}
+          {commonMistakes.length > 0 && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-6">
+              <h3 className="font-semibold flex items-center gap-2 mb-2">⚠️ Common Mistakes to Avoid</h3>
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
+                {commonMistakes.map((mistake, i) => <li key={i}>{mistake}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {/* Complete Button */}
+          {!isCompleted ? (
+            <button
+              onClick={onComplete}
+              className="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition text-lg"
+            >
+              ✓ Mark as Complete & Continue
+            </button>
+          ) : (
+            <div className="text-center p-4 bg-green-100 rounded-lg text-green-700">
+              ✅ You've completed this lesson! 🎉
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default LessonViewer;
